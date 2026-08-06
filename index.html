@@ -1,0 +1,304 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+
+    <meta
+        name="viewport"
+        content="width=device-width, initial-scale=1.0, viewport-fit=cover"
+    >
+
+    <meta
+        name="theme-color"
+        content="#0B1020"
+    >
+
+    <meta
+        name="description"
+        content="Avenmark Avi Runner — an Avenmark Digital space runner starring Avi the astronaut."
+    >
+
+    <title>Avenmark Avi Runner</title>
+
+    <link rel="stylesheet" href="style.css">
+</head>
+
+<body>
+
+    <!-- =========================================================
+         AVENMARK AVI RUNNER
+         ========================================================= -->
+
+    <main id="game-shell">
+
+        <!-- =====================================================
+             GAME HEADER
+             ===================================================== -->
+
+        <header id="game-header">
+
+            <div id="brand-lockup">
+                <div id="brand-name">AVENMARK</div>
+                <div id="brand-subtitle">DIGITAL</div>
+            </div>
+
+            <div id="game-title">
+                <span id="game-title-main">AVI RUNNER</span>
+                <span id="game-title-subtitle">SPACE MISSION</span>
+            </div>
+
+            <div id="score-panel" aria-label="Game score">
+
+                <div class="score-item">
+                    <span class="score-label">SCORE</span>
+                    <span id="score">00000</span>
+                </div>
+
+                <div class="score-item">
+                    <span class="score-label">BEST</span>
+                    <span id="high-score">00000</span>
+                </div>
+
+            </div>
+
+        </header>
+
+
+        <!-- =====================================================
+             GAME AREA
+             ===================================================== -->
+
+        <section
+            id="game-container"
+            aria-label="Avenmark Avi Runner game"
+        >
+
+            <!--
+                The canvas is intentionally the primary rendering
+                surface. All animated game objects will be drawn
+                through script.js.
+            -->
+
+            <canvas
+                id="game-canvas"
+                aria-label="Avi Runner game canvas"
+            ></canvas>
+
+
+            <!-- =================================================
+                 GAME START SCREEN
+                 ================================================= -->
+
+            <div
+                id="start-screen"
+                class="game-overlay"
+            >
+
+                <div class="overlay-card">
+
+                    <div class="overlay-eyebrow">
+                        AVENMARK DIGITAL
+                    </div>
+
+                    <h1>
+                        AVI RUNNER
+                    </h1>
+
+                    <p class="overlay-description">
+                        Help Avi navigate the stars.
+                    </p>
+
+                    <button
+                        id="start-button"
+                        class="game-button"
+                        type="button"
+                    >
+                        START MISSION
+                    </button>
+
+                    <div class="controls-hint">
+                        <span class="desktop-controls">
+                            SPACE / ↑ &nbsp;•&nbsp; JUMP
+                        </span>
+
+                        <span class="mobile-controls">
+                            TAP &nbsp;•&nbsp; JUMP
+                        </span>
+                    </div>
+
+                </div>
+
+            </div>
+
+
+            <!-- =================================================
+                 GAME OVER SCREEN
+                 ================================================= -->
+
+            <div
+                id="game-over-screen"
+                class="game-overlay hidden"
+            >
+
+                <div class="overlay-card">
+
+                    <div class="overlay-eyebrow">
+                        MISSION ENDED
+                    </div>
+
+                    <h2>
+                        AVI'S RUN IS OVER
+                    </h2>
+
+                    <p class="overlay-description">
+                        How far can you make it next time?
+                    </p>
+
+                    <div id="final-score-panel">
+
+                        <div class="final-score-item">
+                            <span class="final-score-label">
+                                SCORE
+                            </span>
+
+                            <span id="final-score">
+                                00000
+                            </span>
+                        </div>
+
+                        <div class="final-score-item">
+                            <span class="final-score-label">
+                                BEST
+                            </span>
+
+                            <span id="final-high-score">
+                                00000
+                            </span>
+                        </div>
+
+                    </div>
+
+                    <button
+                        id="restart-button"
+                        class="game-button"
+                        type="button"
+                    >
+                        RUN AGAIN
+                    </button>
+
+                    <div class="controls-hint">
+                        <span class="desktop-controls">
+                            SPACE / ↑ &nbsp;•&nbsp; RESTART
+                        </span>
+
+                        <span class="mobile-controls">
+                            TAP &nbsp;•&nbsp; RESTART
+                        </span>
+                    </div>
+
+                </div>
+
+            </div>
+
+
+            <!-- =================================================
+                 PAUSE SCREEN
+                 ================================================= -->
+
+            <div
+                id="pause-screen"
+                class="game-overlay hidden"
+            >
+
+                <div class="overlay-card">
+
+                    <div class="overlay-eyebrow">
+                        MISSION PAUSED
+                    </div>
+
+                    <h2>
+                        PAUSED
+                    </h2>
+
+                    <button
+                        id="resume-button"
+                        class="game-button"
+                        type="button"
+                    >
+                        RESUME
+                    </button>
+
+                </div>
+
+            </div>
+
+
+            <!-- =================================================
+                 MOBILE TOUCH CONTROL
+                 ================================================= -->
+
+            <button
+                id="touch-jump"
+                type="button"
+                aria-label="Jump"
+            >
+                JUMP
+            </button>
+
+        </section>
+
+
+        <!-- =====================================================
+             GAME FOOTER / STATUS
+             ===================================================== -->
+
+        <footer id="game-footer">
+
+            <div id="mission-status">
+                <span
+                    id="status-indicator"
+                    aria-hidden="true"
+                ></span>
+
+                <span id="status-text">
+                    READY
+                </span>
+            </div>
+
+            <div id="footer-center">
+                AVENMARK DIGITAL
+            </div>
+
+            <div id="footer-right">
+                <span id="version-label">
+                    AVI-01
+                </span>
+            </div>
+
+        </footer>
+
+    </main>
+
+
+    <!-- =========================================================
+         ACCESSIBILITY / NOSCRIPT
+         ========================================================= -->
+
+    <noscript>
+        <div id="noscript-message">
+            <h1>Avi Runner</h1>
+            <p>
+                JavaScript is required to play Avenmark Avi Runner.
+            </p>
+        </div>
+    </noscript>
+
+
+    <!-- =========================================================
+         GAME SCRIPT
+         ========================================================= -->
+
+    <script src="script.js"></script>
+
+</body>
+</html>
