@@ -3,2405 +3,1358 @@
    GAME ENGINE
 ========================================================== */
 
-(() => {
+"use strict";
 
-    "use strict";
+/* ==========================================================
+   DOM
+========================================================== */
 
+const canvas = document.getElementById("game-canvas");
+const ctx = canvas.getContext("2d");
 
-    /* ========================================================
-       DOM
-    ======================================================== */
+const startScreen = document.getElementById("start-screen");
+const gameOverScreen = document.getElementById("game-over-screen");
+const pauseScreen = document.getElementById("pause-screen");
 
-    const canvas =
-        document.getElementById("game-canvas");
+const startButton = document.getElementById("start-button");
+const restartButton = document.getElementById("restart-button");
+const resumeButton = document.getElementById("resume-button");
 
-    const ctx =
-        canvas.getContext("2d");
+const pauseButton = document.getElementById("pause-button");
+const resetButton = document.getElementById("reset-button");
 
+const scoreDisplay = document.getElementById("score-display");
+const highScoreDisplay = document.getElementById("high-score-display");
+const finalScoreDisplay = document.getElementById("final-score");
 
-    const startScreen =
-        document.getElementById("start-screen");
+const speedSlider = document.getElementById("speed-slider");
+const speedValue = document.getElementById("speed-value");
 
-    const pauseScreen =
-        document.getElementById("pause-screen");
+const soundToggle = document.getElementById("sound-toggle");
+const soundLabel = document.getElementById("sound-label");
 
-    const gameOverScreen =
-        document.getElementById("game-over-screen");
+const continueMessage = document.getElementById("continue-message");
 
+/* ==========================================================
+   COLORS
+========================================================== */
 
-    const startButton =
-        document.getElementById("start-button");
+const COLORS = {
+    bg: "#F5F5F2",
+    dark: "#2F2F2F",
+    copper: "#C47A45",
+    space: "#103159"
+};
 
-    const pauseButton =
-        document.getElementById("pause-button");
+/* ==========================================================
+   CANVAS
+========================================================== */
 
-    const resetButton =
-        document.getElementById("reset-button");
+let width = 0;
+let height = 0;
+let groundY = 0;
+let dpr = 1;
 
-    const resumeButton =
-        document.getElementById("resume-button");
+function resizeCanvas() {
+    const rect = canvas.getBoundingClientRect();
 
-    const restartButton =
-        document.getElementById("restart-button");
+    dpr = Math.min(window.devicePixelRatio || 1, 2);
 
+    width = Math.max(1, rect.width);
+    height = Math.max(1, rect.height);
 
-    const scoreDisplay =
-        document.getElementById("score-display");
+    canvas.width = Math.floor(width * dpr);
+    canvas.height = Math.floor(height * dpr);
 
-    const highScoreDisplay =
-        document.getElementById("high-score-display");
+    ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
 
-    const finalScoreDisplay =
-        document.getElementById("final-score");
+    groundY = height * 0.78;
 
+    if (avi) {
+        avi.y = groundY - avi.height;
+    }
+}
 
-    const speedSlider =
-        document.getElementById("speed-slider");
+window.addEventListener("resize", resizeCanvas);
 
-    const speedValue =
-        document.getElementById("speed-value");
+/* ==========================================================
+   GAME STATE
+========================================================== */
 
-    const soundToggle =
-        document.getElementById("sound-toggle");
+let running = false;
+let paused = false;
+let gameStarted = false;
 
+let animationFrame = null;
+let lastTime = 0;
 
-    /* ========================================================
-       CONSTANTS
-    ======================================================== */
+let score = 0;
+let highScore = Number(localStorage.getItem("avenmark-avi-high-score") || 0);
 
-    const COLORS = {
+let distance = 0;
+let obstacleTimer = 0;
 
-        bg: "#F5F5F2",
+let speedSetting = 1;
 
-        dark: "#2F2F2F",
+/*
+    0 = slightly slower
+    1 = normal
+    2+ = progressively faster
+*/
 
-        blue: "#103159",
+const BASE_SPEED = 6.0;
 
-        copper: "#C47A45",
+function getSpeedMultiplier() {
+    if (speedSetting === 0) return 0.86;
+    if (speedSetting === 1) return 1.0;
 
-        muted:
-            "rgba(47, 47, 47, 0.28)"
+    return 1 + ((speedSetting - 1) * 0.24);
+}
+
+function getGameSpeed() {
+    return BASE_SPEED * getSpeedMultiplier();
+}
+
+/* ==========================================================
+   SKY STATE
+========================================================== */
+
+let skyMode = "stars";
+let lastSkyMilestone = 0;
+
+function updateSkyMode() {
+    const milestone = Math.floor(score / 2500);
+
+    if (milestone !== lastSkyMilestone) {
+        lastSkyMilestone = milestone;
+
+        skyMode = milestone % 2 === 0
+            ? "stars"
+            : "nebula";
+    }
+}
+
+/* ==========================================================
+   AVI
+========================================================== */
+
+const avi = {
+    x: 90,
+    y: 0,
+
+    width: 52,
+    height: 70,
+
+    velocityY: 0,
+
+    gravity: 0.58,
+    jumpForce: -12.5,
+
+    grounded: true,
+
+    runTime: 0
+};
+
+function resetAvi() {
+    avi.x = Math.max(45, width * 0.10);
+    avi.y = groundY - avi.height;
+    avi.velocityY = 0;
+    avi.grounded = true;
+    avi.runTime = 0;
+}
+
+function jump() {
+    if (!running || paused) return;
+
+    if (avi.grounded) {
+        avi.velocityY = avi.jumpForce;
+        avi.grounded = false;
+
+        playJumpSound();
+    }
+}
+
+/* ==========================================================
+   CRATERS
+========================================================== */
+
+const craters = [];
+
+function createCrater(x = width + 50) {
+    const size = random(25, 65);
+
+    craters.push({
+        x,
+        width: size,
+        height: random(7, 15),
+        depth: random(3, 8),
+        passed: false
+    });
+}
+
+function initializeCraters() {
+    craters.length = 0;
+
+    let x = 140;
+
+    while (x < width + 200) {
+        x += random(130, 280);
+        createCrater(x);
+    }
+}
+
+function updateCraters(delta) {
+    const movement = getGameSpeed() * delta * 0.07;
+
+    for (const crater of craters) {
+        crater.x -= movement;
+    }
+
+    while (
+        craters.length &&
+        craters[0].x + craters[0].width < -100
+    ) {
+        craters.shift();
+    }
+
+    const last = craters[craters.length - 1];
+
+    if (last && last.x < width + 50) {
+        createCrater(
+            last.x +
+            last.width +
+            random(150, 300)
+        );
+    }
+}
+
+function drawCrater(crater) {
+    const x = crater.x;
+    const y = groundY + 3;
+
+    /*
+        A shallow elliptical depression.
+        The outer edge gives it a clear crater silhouette,
+        while the inner shape makes the depression readable.
+    */
+
+    ctx.save();
+
+    ctx.strokeStyle = "rgba(47,47,47,0.28)";
+    ctx.lineWidth = 2;
+
+    ctx.beginPath();
+    ctx.ellipse(
+        x + crater.width / 2,
+        y,
+        crater.width / 2,
+        crater.height,
+        0,
+        0,
+        Math.PI * 2
+    );
+    ctx.stroke();
+
+    ctx.fillStyle = "rgba(47,47,47,0.055)";
+
+    ctx.beginPath();
+    ctx.ellipse(
+        x + crater.width / 2,
+        y + 1,
+        crater.width / 2 - 2,
+        crater.depth + 2,
+        0,
+        0,
+        Math.PI * 2
+    );
+    ctx.fill();
+
+    ctx.restore();
+}
+
+/* ==========================================================
+   UFO OBSTACLES
+========================================================== */
+
+const ufos = [];
+
+function createUFO(x = width + 100) {
+    const flyingHeight = random(95, 185);
+
+    ufos.push({
+        x,
+        y: groundY - flyingHeight,
+
+        width: random(42, 58),
+        height: random(17, 23),
+
+        passed: false,
+
+        drift: random(0, Math.PI * 2)
+    });
+}
+
+function initializeUFOs() {
+    ufos.length = 0;
+
+    let x = width + 350;
+
+    for (let i = 0; i < 3; i++) {
+        x += random(450, 750);
+        createUFO(x);
+    }
+}
+
+function updateUFOs(delta) {
+    const movement = getGameSpeed() * delta * 0.07;
+
+    for (const ufo of ufos) {
+        ufo.x -= movement;
+
+        ufo.drift += delta * 0.002;
+
+        ufo.y += Math.sin(ufo.drift) * 0.12;
+    }
+
+    while (
+        ufos.length &&
+        ufos[0].x + ufos[0].width < -100
+    ) {
+        ufos.shift();
+    }
+
+    const last = ufos[ufos.length - 1];
+
+    if (last && last.x < width + 100) {
+        createUFO(
+            last.x +
+            random(500, 850)
+        );
+    }
+}
+
+function drawUFO(ufo) {
+    const cx = ufo.x + ufo.width / 2;
+    const cy = ufo.y + ufo.height / 2;
+
+    ctx.save();
+
+    /*
+        Deliberately simple.
+        The UFO should read almost like a Chrome Dino obstacle,
+        not like a detailed spaceship illustration.
+    */
+
+    ctx.fillStyle = COLORS.space;
+
+    ctx.beginPath();
+    ctx.ellipse(
+        cx,
+        cy,
+        ufo.width / 2,
+        ufo.height / 2.2,
+        0,
+        0,
+        Math.PI * 2
+    );
+    ctx.fill();
+
+    ctx.fillStyle = COLORS.bg;
+
+    ctx.beginPath();
+    ctx.ellipse(
+        cx,
+        cy - 3,
+        ufo.width * 0.24,
+        ufo.height * 0.32,
+        0,
+        Math.PI,
+        Math.PI * 2
+    );
+    ctx.fill();
+
+    ctx.fillStyle = COLORS.copper;
+
+    ctx.beginPath();
+    ctx.arc(
+        cx,
+        cy + ufo.height * 0.36,
+        2.5,
+        0,
+        Math.PI * 2
+    );
+    ctx.fill();
+
+    ctx.restore();
+}
+
+/* ==========================================================
+   STARS
+========================================================== */
+
+const stars = [];
+
+function initializeStars() {
+    stars.length = 0;
+
+    for (let i = 0; i < 45; i++) {
+        stars.push({
+            x: Math.random() * width,
+            y: Math.random() * (groundY * 0.75),
+            size: random(1, 2.3),
+            alpha: random(0.35, 0.85)
+        });
+    }
+}
+
+function drawStars() {
+    ctx.save();
+
+    for (const star of stars) {
+        ctx.globalAlpha = star.alpha;
+        ctx.fillStyle = COLORS.copper;
+
+        ctx.beginPath();
+        ctx.arc(
+            star.x,
+            star.y,
+            star.size,
+            0,
+            Math.PI * 2
+        );
+
+        ctx.fill();
+    }
+
+    ctx.restore();
+}
+
+/* ==========================================================
+   BLUE NEBULA
+========================================================== */
+
+function drawNebula() {
+    const gradient = ctx.createRadialGradient(
+        width * 0.52,
+        height * 0.30,
+        10,
+        width * 0.52,
+        height * 0.30,
+        width * 0.75
+    );
+
+    gradient.addColorStop(0, "rgba(16,49,89,0.16)");
+    gradient.addColorStop(0.45, "rgba(16,49,89,0.08)");
+    gradient.addColorStop(1, "rgba(16,49,89,0)");
+
+    ctx.fillStyle = gradient;
+
+    ctx.fillRect(
+        0,
+        0,
+        width,
+        groundY
+    );
+
+    /*
+        Sparse copper points remain in the nebula so the
+        Avenmark identity doesn't disappear completely.
+    */
+
+    ctx.save();
+
+    for (let i = 0; i < 18; i++) {
+        const x = ((i * 173) + 70) % width;
+        const y = ((i * 71) + 38) % Math.max(100, groundY * 0.72);
+
+        ctx.globalAlpha = 0.45;
+
+        ctx.fillStyle = COLORS.copper;
+
+        ctx.beginPath();
+        ctx.arc(x, y, 1.3, 0, Math.PI * 2);
+        ctx.fill();
+    }
+
+    ctx.restore();
+}
+
+/* ==========================================================
+   TERRAIN
+========================================================== */
+
+function drawTerrain() {
+    ctx.save();
+
+    ctx.strokeStyle = COLORS.dark;
+    ctx.globalAlpha = 0.28;
+    ctx.lineWidth = 2;
+
+    ctx.beginPath();
+    ctx.moveTo(0, groundY);
+    ctx.lineTo(width, groundY);
+    ctx.stroke();
+
+    ctx.globalAlpha = 0.08;
+
+    ctx.beginPath();
+
+    for (let x = 0; x <= width; x += 32) {
+        const bump =
+            Math.sin(x * 0.028) * 2 +
+            Math.sin(x * 0.071) * 1.3;
+
+        ctx.lineTo(x, groundY + bump);
+    }
+
+    ctx.stroke();
+
+    ctx.restore();
+}
+
+/* ==========================================================
+   AVI DRAWING
+========================================================== */
+
+function drawAvi() {
+    const x = avi.x;
+    const y = avi.y;
+
+    const bob =
+        avi.grounded
+            ? Math.sin(avi.runTime * 0.018) * 1.5
+            : 0;
+
+    ctx.save();
+    ctx.translate(x, y + bob);
+
+    /*
+        Avi faces RIGHT.
+        The shapes are intentionally simple and clean.
+    */
+
+    const runPhase =
+        Math.sin(avi.runTime * 0.025);
+
+    /* Backpack */
+    ctx.fillStyle = COLORS.dark;
+
+    roundRect(
+        ctx,
+        2,
+        27,
+        13,
+        27,
+        5
+    );
+
+    ctx.fill();
+
+    /* Backpack copper detail */
+    ctx.fillStyle = COLORS.copper;
+
+    roundRect(
+        ctx,
+        4,
+        33,
+        4,
+        10,
+        2
+    );
+
+    ctx.fill();
+
+    /* Body */
+    ctx.fillStyle = COLORS.dark;
+
+    roundRect(
+        ctx,
+        14,
+        28,
+        27,
+        29,
+        9
+    );
+
+    ctx.fill();
+
+    /* Chest panel */
+    ctx.fillStyle = COLORS.bg;
+
+    roundRect(
+        ctx,
+        23,
+        34,
+        12,
+        9,
+        2
+    );
+
+    ctx.fill();
+
+    /* Copper chest mark */
+    ctx.fillStyle = COLORS.copper;
+
+    ctx.fillRect(
+        26,
+        36,
+        6,
+        2
+    );
+
+    /* Helmet */
+    ctx.fillStyle = COLORS.dark;
+
+    ctx.beginPath();
+    ctx.arc(
+        34,
+        18,
+        17,
+        0,
+        Math.PI * 2
+    );
+    ctx.fill();
+
+    /* Helmet glass */
+    ctx.fillStyle = COLORS.bg;
+
+    ctx.beginPath();
+
+    /*
+        Offset toward the RIGHT so the face reads as
+        directional rather than front-facing.
+    */
+
+    ctx.ellipse(
+        39,
+        18,
+        11,
+        10,
+        0,
+        0,
+        Math.PI * 2
+    );
+
+    ctx.fill();
+
+    /* Small face indication */
+    ctx.fillStyle = COLORS.dark;
+
+    ctx.beginPath();
+    ctx.arc(
+        44,
+        17,
+        1.4,
+        0,
+        Math.PI * 2
+    );
+
+    ctx.fill();
+
+    /* Arm holding laptop */
+    ctx.strokeStyle = COLORS.dark;
+    ctx.lineWidth = 8;
+    ctx.lineCap = "round";
+
+    ctx.beginPath();
+    ctx.moveTo(20, 34);
+    ctx.lineTo(38, 47);
+    ctx.stroke();
+
+    /* Laptop screen */
+    ctx.fillStyle = COLORS.dark;
+
+    roundRect(
+        ctx,
+        34,
+        43,
+        17,
+        11,
+        2
+    );
+
+    ctx.fill();
+
+    /* Laptop screen */
+    ctx.fillStyle = COLORS.bg;
+
+    roundRect(
+        ctx,
+        36,
+        45,
+        13,
+        7,
+        1.5
+    );
+
+    ctx.fill();
+
+    /* Laptop base */
+    ctx.fillStyle = COLORS.dark;
+
+    ctx.beginPath();
+    ctx.moveTo(32, 54);
+    ctx.lineTo(53, 54);
+    ctx.lineTo(56, 58);
+    ctx.lineTo(30, 58);
+    ctx.closePath();
+    ctx.fill();
+
+    /* Copper laptop indicator */
+    ctx.fillStyle = COLORS.copper;
+
+    ctx.fillRect(
+        43,
+        47,
+        4,
+        1.5
+    );
+
+    /* Legs */
+    ctx.strokeStyle = COLORS.dark;
+    ctx.lineWidth = 8;
+
+    const legOffset =
+        avi.grounded
+            ? runPhase * 4
+            : 0;
+
+    ctx.beginPath();
+    ctx.moveTo(21, 54);
+    ctx.lineTo(17 + legOffset, 67);
+    ctx.stroke();
+
+    ctx.beginPath();
+    ctx.moveTo(34, 54);
+    ctx.lineTo(38 - legOffset, 67);
+    ctx.stroke();
+
+    /* Boots */
+    ctx.lineWidth = 6;
+
+    ctx.beginPath();
+    ctx.moveTo(14 + legOffset, 67);
+    ctx.lineTo(21 + legOffset, 67);
+    ctx.stroke();
+
+    ctx.beginPath();
+    ctx.moveTo(35 - legOffset, 67);
+    ctx.lineTo(42 - legOffset, 67);
+    ctx.stroke();
+
+    ctx.restore();
+}
+
+/* ==========================================================
+   HELPERS
+========================================================== */
+
+function roundRect(ctx, x, y, w, h, r) {
+    const radius = Math.min(r, w / 2, h / 2);
+
+    ctx.beginPath();
+
+    ctx.moveTo(x + radius, y);
+    ctx.lineTo(x + w - radius, y);
+
+    ctx.quadraticCurveTo(
+        x + w,
+        y,
+        x + w,
+        y + radius
+    );
+
+    ctx.lineTo(
+        x + w,
+        y + h - radius
+    );
+
+    ctx.quadraticCurveTo(
+        x + w,
+        y + h,
+        x + w - radius,
+        y + h
+    );
+
+    ctx.lineTo(
+        x + radius,
+        y + h
+    );
+
+    ctx.quadraticCurveTo(
+        x,
+        y + h,
+        x,
+        y + h - radius
+    );
+
+    ctx.lineTo(
+        x,
+        y + radius
+    );
+
+    ctx.quadraticCurveTo(
+        x,
+        y,
+        x + radius,
+        y
+    );
+
+    ctx.closePath();
+}
+
+function random(min, max) {
+    return Math.random() * (max - min) + min;
+}
+
+/* ==========================================================
+   COLLISION
+========================================================== */
+
+function getAviHitbox() {
+    return {
+        x: avi.x + 15,
+        y: avi.y + 8,
+        width: 34,
+        height: 57
     };
+}
 
+function intersects(a, b) {
+    return (
+        a.x < b.x + b.width &&
+        a.x + a.width > b.x &&
+        a.y < b.y + b.height &&
+        a.y + a.height > b.y
+    );
+}
 
-    const SPEEDS = {
+function checkCollisions() {
+    const player = getAviHitbox();
 
-        0: 0.86,
-        1: 1.00,
-        2: 1.12,
-        3: 1.26,
-        4: 1.42
-    };
+    for (const ufo of ufos) {
+        const hitbox = {
+            x: ufo.x + 5,
+            y: ufo.y + 3,
+            width: ufo.width - 10,
+            height: ufo.height - 5
+        };
 
-
-    /* ========================================================
-       GAME STATE
-    ======================================================== */
-
-    let state = "ready";
-
-    let animationFrame = null;
-
-    let lastTime = 0;
-
-    let elapsed = 0;
-
-    let distance = 0;
-
-    let score = 0;
-
-    let highScore =
-        Number(
-            localStorage.getItem(
-                "avenmark-avi-high-score"
-            )
-        ) || 0;
-
-
-    let speedLevel = 1;
-
-    let gameSpeed =
-        SPEEDS[speedLevel];
-
-
-    let groundOffset = 0;
-
-    let obstacleTimer = 0;
-
-    let nextObstacle =
-        randomBetween(1050, 1650);
-
-
-    let debrisTimer = 0;
-
-    let nextDebris =
-        randomBetween(500, 1100);
-
-
-    let messageTimer = 0;
-
-    let currentMessage = "";
-
-    let messageAlpha = 0;
-
-
-    /* ========================================================
-       PLAYER
-    ======================================================== */
-
-    const avi = {
-
-        x: 100,
-
-        y: 0,
-
-        width: 54,
-
-        height: 70,
-
-        velocityY: 0,
-
-        gravity: 0.00245,
-
-        jumpForce: -0.84,
-
-        grounded: true,
-
-        bob: 0
-    };
-
-
-    /* ========================================================
-       WORLD
-    ======================================================== */
-
-    let groundY = 0;
-
-    let obstacles = [];
-
-    let debris = [];
-
-    let stars = [];
-
-
-    /* ========================================================
-       AUDIO
-    ======================================================== */
-
-    let audioContext = null;
-
-    let masterGain = null;
-
-    let soundEnabled = true;
-
-
-    function initAudio() {
-
-        if (audioContext) {
+        if (intersects(player, hitbox)) {
+            endGame();
             return;
         }
+    }
+}
 
+/* ==========================================================
+   SCORE
+========================================================== */
+
+function updateScore(delta) {
+    score += delta * 0.006 * getSpeedMultiplier();
+
+    const displayedScore = Math.floor(score);
+
+    scoreDisplay.textContent = displayedScore.toString();
+
+    if (displayedScore > highScore) {
+        highScore = displayedScore;
+
+        highScoreDisplay.textContent =
+            highScore.toString();
+
+        localStorage.setItem(
+            "avenmark-avi-high-score",
+            highScore.toString()
+        );
+    }
+
+    updateSkyMode();
+
+    const continueMilestone =
+        Math.floor(displayedScore / 1500);
+
+    if (
+        continueMilestone > 0 &&
+        displayedScore % 1500 < 2
+    ) {
+        showContinueMessage();
+    }
+}
+
+let continueTimeout = null;
+
+function showContinueMessage() {
+    clearTimeout(continueTimeout);
+
+    continueMessage.classList.add("show");
+
+    continueTimeout = setTimeout(() => {
+        continueMessage.classList.remove("show");
+    }, 1100);
+}
+
+/* ==========================================================
+   PHYSICS
+========================================================== */
+
+function updateAvi(delta) {
+    if (!avi.grounded) {
+        avi.velocityY += avi.gravity * delta * 0.06;
+
+        avi.y += avi.velocityY * delta * 0.06;
+
+        if (avi.y >= groundY - avi.height) {
+            avi.y = groundY - avi.height;
+            avi.velocityY = 0;
+            avi.grounded = true;
+        }
+    }
+
+    avi.runTime += delta;
+}
+
+/* ==========================================================
+   DRAW
+========================================================== */
+
+function drawBackground() {
+    ctx.fillStyle = COLORS.bg;
+
+    ctx.fillRect(
+        0,
+        0,
+        width,
+        height
+    );
+
+    if (skyMode === "stars") {
+        drawStars();
+    } else {
+        drawNebula();
+    }
+}
+
+function drawGame() {
+    ctx.clearRect(
+        0,
+        0,
+        width,
+        height
+    );
+
+    drawBackground();
+
+    for (const crater of craters) {
+        drawCrater(crater);
+    }
+
+    for (const ufo of ufos) {
+        drawUFO(ufo);
+    }
+
+    drawTerrain();
+    drawAvi();
+}
+
+/* ==========================================================
+   GAME LOOP
+========================================================== */
+
+function gameLoop(timestamp) {
+    if (!running) return;
+
+    if (!lastTime) {
+        lastTime = timestamp;
+    }
+
+    const delta = Math.min(
+        timestamp - lastTime,
+        40
+    );
+
+    lastTime = timestamp;
+
+    if (!paused) {
+        updateAvi(delta);
+        updateCraters(delta);
+        updateUFOs(delta);
+
+        updateScore(delta);
+        checkCollisions();
+    }
+
+    drawGame();
+
+    animationFrame =
+        requestAnimationFrame(gameLoop);
+}
+
+/* ==========================================================
+   START
+========================================================== */
+
+function startGame() {
+    ensureAudio();
+
+    running = true;
+    paused = false;
+    gameStarted = true;
+
+    score = 0;
+    distance = 0;
+    lastSkyMilestone = 0;
+    skyMode = "stars";
+
+    resetAvi();
+
+    initializeStars();
+    initializeCraters();
+    initializeUFOs();
+
+    scoreDisplay.textContent = "0";
+    highScoreDisplay.textContent =
+        highScore.toString();
+
+    startScreen.classList.add("hidden");
+    gameOverScreen.classList.add("hidden");
+    pauseScreen.classList.add("hidden");
+
+    pauseButton.textContent = "Pause";
+    pauseButton.classList.remove("active");
+
+    lastTime = 0;
+
+    cancelAnimationFrame(animationFrame);
+
+    animationFrame =
+        requestAnimationFrame(gameLoop);
+
+    playStartSound();
+}
+
+/* ==========================================================
+   GAME OVER
+========================================================== */
+
+function endGame() {
+    if (!running) return;
+
+    running = false;
+    paused = false;
+
+    cancelAnimationFrame(animationFrame);
+
+    finalScoreDisplay.textContent =
+        `Score ${Math.floor(score)}`;
+
+    gameOverScreen.classList.remove("hidden");
+
+    pauseButton.textContent = "Pause";
+    pauseButton.classList.remove("active");
+
+    playGameOverSound();
+}
+
+/* ==========================================================
+   RESET
+========================================================== */
+
+function resetGame() {
+    running = false;
+    paused = false;
+
+    cancelAnimationFrame(animationFrame);
+
+    score = 0;
+    skyMode = "stars";
+    lastSkyMilestone = 0;
+
+    resetAvi();
+
+    initializeStars();
+    initializeCraters();
+    initializeUFOs();
+
+    scoreDisplay.textContent = "0";
+
+    startScreen.classList.remove("hidden");
+    gameOverScreen.classList.add("hidden");
+    pauseScreen.classList.add("hidden");
+
+    pauseButton.textContent = "Pause";
+    pauseButton.classList.remove("active");
+
+    drawGame();
+}
+
+/* ==========================================================
+   PAUSE
+========================================================== */
+
+function togglePause() {
+    if (!gameStarted || !running) return;
+
+    paused = !paused;
+
+    if (paused) {
+        pauseScreen.classList.remove("hidden");
+        pauseButton.textContent = "Resume";
+        pauseButton.classList.add("active");
+
+        playPauseSound();
+    } else {
+        pauseScreen.classList.add("hidden");
+        pauseButton.textContent = "Pause";
+        pauseButton.classList.remove("active");
+
+        lastTime = 0;
+        playResumeSound();
+    }
+}
+
+/* ==========================================================
+   SPEED
+========================================================== */
+
+speedSlider.addEventListener("input", () => {
+    speedSetting = Number(speedSlider.value);
+
+    speedValue.textContent =
+        speedSetting.toString();
+});
+
+/* ==========================================================
+   SOUND ENGINE
+========================================================== */
+
+let audioContext = null;
+
+let soundEnabled = true;
+
+function ensureAudio() {
+    if (!audioContext) {
         const AudioContext =
             window.AudioContext ||
             window.webkitAudioContext;
 
-        if (!AudioContext) {
-            return;
-        }
+        if (!AudioContext) return;
 
-        audioContext =
-            new AudioContext();
-
-        masterGain =
-            audioContext.createGain();
-
-        masterGain.gain.value =
-            soundEnabled ? 0.055 : 0;
-
-        masterGain.connect(
-            audioContext.destination
-        );
+        audioContext = new AudioContext();
     }
 
-
-    async function resumeAudio() {
-
-        initAudio();
-
-        if (
-            audioContext &&
-            audioContext.state === "suspended"
-        ) {
-
-            try {
-                await audioContext.resume();
-            } catch {
-                // Browser declined audio resume.
-            }
-        }
+    if (audioContext.state === "suspended") {
+        audioContext.resume();
     }
+}
 
+function playTone(
+    frequency,
+    duration,
+    volume,
+    type = "sine",
+    slideTo = null
+) {
+    if (!soundEnabled) return;
 
-    function playTone(
+    ensureAudio();
+
+    if (!audioContext) return;
+
+    const oscillator =
+        audioContext.createOscillator();
+
+    const gain =
+        audioContext.createGain();
+
+    oscillator.type = type;
+
+    oscillator.frequency.setValueAtTime(
         frequency,
-        duration,
-        type = "sine",
-        volume = 0.05
-    ) {
+        audioContext.currentTime
+    );
 
-        if (
-            !soundEnabled ||
-            !audioContext ||
-            !masterGain
-        ) {
-            return;
-        }
-
-        const oscillator =
-            audioContext.createOscillator();
-
-        const gain =
-            audioContext.createGain();
-
-        oscillator.type = type;
-
-        oscillator.frequency.setValueAtTime(
-            frequency,
-            audioContext.currentTime
-        );
-
-        gain.gain.setValueAtTime(
-            0,
-            audioContext.currentTime
-        );
-
-        gain.gain.linearRampToValueAtTime(
-            volume,
-            audioContext.currentTime + 0.012
-        );
-
-        gain.gain.exponentialRampToValueAtTime(
-            0.0001,
+    if (slideTo !== null) {
+        oscillator.frequency.exponentialRampToValueAtTime(
+            slideTo,
             audioContext.currentTime + duration
         );
-
-        oscillator.connect(gain);
-
-        gain.connect(masterGain);
-
-        oscillator.start();
-
-        oscillator.stop(
-            audioContext.currentTime + duration + 0.02
-        );
     }
 
+    /*
+        Louder than the previous version, but still
+        bounded so it doesn't become an obnoxious blast.
+    */
 
-    function playJumpSound() {
-
-        playTone(
-            520,
-            0.12,
-            "triangle",
-            0.07
-        );
-
-        window.setTimeout(() => {
-
-            playTone(
-                720,
-                0.10,
-                "triangle",
-                0.04
-            );
-
-        }, 35);
-    }
-
-
-    function playCrashSound() {
-
-        playTone(
-            115,
-            0.18,
-            "sawtooth",
-            0.06
-        );
-
-        window.setTimeout(() => {
-
-            playTone(
-                75,
-                0.22,
-                "sine",
-                0.04
-            );
-
-        }, 60);
-    }
-
-
-    function playMilestoneSound() {
-
-        playTone(
-            660,
-            0.10,
-            "triangle",
-            0.045
-        );
-
-        window.setTimeout(() => {
-
-            playTone(
-                880,
-                0.14,
-                "triangle",
-                0.045
-            );
-
-        }, 80);
-    }
-
-
-    /* ========================================================
-       RESIZE
-    ======================================================== */
-
-    function resizeCanvas() {
-
-        const rect =
-            canvas.getBoundingClientRect();
-
-        const dpr =
-            Math.min(
-                window.devicePixelRatio || 1,
-                2
-            );
-
-        canvas.width =
-            Math.max(
-                1,
-                Math.floor(rect.width * dpr)
-            );
-
-        canvas.height =
-            Math.max(
-                1,
-                Math.floor(rect.height * dpr)
-            );
-
-        ctx.setTransform(
-            dpr,
-            0,
-            0,
-            dpr,
-            0,
-            0
-        );
-
-        groundY =
-            rect.height * 0.76;
-
-        avi.x =
-            Math.max(
-                55,
-                rect.width * 0.115
-            );
-
-        if (avi.grounded) {
-
-            avi.y =
-                groundY - avi.height;
-        }
-
-        createStars();
-
-        draw();
-    }
-
-
-    window.addEventListener(
-        "resize",
-        resizeCanvas
+    gain.gain.setValueAtTime(
+        0.0001,
+        audioContext.currentTime
     );
 
+    gain.gain.exponentialRampToValueAtTime(
+        Math.min(volume, 0.25),
+        audioContext.currentTime + 0.008
+    );
 
-    /* ========================================================
-       STARS
-    ======================================================== */
+    gain.gain.exponentialRampToValueAtTime(
+        0.0001,
+        audioContext.currentTime + duration
+    );
 
-    function createStars() {
+    oscillator.connect(gain);
+    gain.connect(audioContext.destination);
 
-        const width =
-            canvas.clientWidth;
+    oscillator.start();
+    oscillator.stop(
+        audioContext.currentTime + duration + 0.02
+    );
+}
 
-        const height =
-            canvas.clientHeight;
+function playStartSound() {
+    playTone(440, 0.09, 0.17, "triangle", 520);
 
-        stars = [];
+    setTimeout(() => {
+        playTone(660, 0.12, 0.18, "triangle", 740);
+    }, 80);
+}
 
-        const count =
-            Math.max(
-                30,
-                Math.floor(width / 24)
-            );
+function playJumpSound() {
+    playTone(380, 0.12, 0.16, "square", 650);
+}
 
-        for (let i = 0; i < count; i++) {
+function playGameOverSound() {
+    playTone(300, 0.15, 0.18, "triangle", 220);
 
-            stars.push({
+    setTimeout(() => {
+        playTone(220, 0.22, 0.17, "triangle", 150);
+    }, 120);
+}
 
-                x:
-                    Math.random() * width,
+function playPauseSound() {
+    playTone(420, 0.08, 0.14, "sine", 330);
+}
 
-                y:
-                    Math.random() *
-                    Math.max(
-                        50,
-                        height * 0.57
-                    ),
+function playResumeSound() {
+    playTone(330, 0.08, 0.14, "sine", 440);
+}
 
-                size:
-                    randomBetween(
-                        0.7,
-                        1.8
-                    ),
+/* ==========================================================
+   SOUND TOGGLE
+========================================================== */
 
-                alpha:
-                    randomBetween(
-                        0.20,
-                        0.62
-                    ),
+soundToggle.addEventListener("click", () => {
+    soundEnabled = !soundEnabled;
 
-                drift:
-                    randomBetween(
-                        0.04,
-                        0.14
-                    )
-            });
-        }
+    soundToggle.classList.toggle(
+        "active",
+        soundEnabled
+    );
+
+    soundToggle.setAttribute(
+        "aria-pressed",
+        soundEnabled.toString()
+    );
+
+    soundLabel.textContent =
+        soundEnabled ? "On" : "Off";
+
+    if (soundEnabled) {
+        ensureAudio();
+        playTone(520, 0.09, 0.16, "triangle", 650);
     }
+});
 
+/* ==========================================================
+   CONTROLS
+========================================================== */
 
-    /* ========================================================
-       DRAWING HELPERS
-    ======================================================== */
+startButton.addEventListener(
+    "click",
+    startGame
+);
 
-    function roundedRect(
-        x,
-        y,
-        width,
-        height,
-        radius
+restartButton.addEventListener(
+    "click",
+    startGame
+);
+
+resumeButton.addEventListener(
+    "click",
+    togglePause
+);
+
+pauseButton.addEventListener(
+    "click",
+    togglePause
+);
+
+resetButton.addEventListener(
+    "click",
+    resetGame
+);
+
+/* ==========================================================
+   KEYBOARD
+========================================================== */
+
+window.addEventListener("keydown", (event) => {
+
+    if (
+        event.code === "Space" ||
+        event.code === "ArrowUp"
     ) {
+        event.preventDefault();
 
-        const r =
-            Math.min(
-                radius,
-                width / 2,
-                height / 2
-            );
-
-        ctx.beginPath();
-
-        ctx.moveTo(
-            x + r,
-            y
-        );
-
-        ctx.arcTo(
-            x + width,
-            y,
-            x + width,
-            y + height,
-            r
-        );
-
-        ctx.arcTo(
-            x + width,
-            y + height,
-            x,
-            y + height,
-            r
-        );
-
-        ctx.arcTo(
-            x,
-            y + height,
-            x,
-            y,
-            r
-        );
-
-        ctx.arcTo(
-            x,
-            y,
-            x + width,
-            y,
-            r
-        );
-
-        ctx.closePath();
-    }
-
-
-    function drawStars() {
-
-        for (const star of stars) {
-
-            ctx.globalAlpha =
-                star.alpha;
-
-            ctx.fillStyle =
-                COLORS.copper;
-
-            ctx.beginPath();
-
-            ctx.arc(
-                star.x,
-                star.y,
-                star.size,
-                0,
-                Math.PI * 2
-            );
-
-            ctx.fill();
-        }
-
-        ctx.globalAlpha = 1;
-    }
-
-
-    /* ========================================================
-       UFO
-    ======================================================== */
-
-    function drawUFO(obstacle) {
-
-        const x = obstacle.x;
-        const y = obstacle.y;
-
-        const width =
-            obstacle.width;
-
-        const height =
-            obstacle.height;
-
-        ctx.save();
-
-        ctx.translate(
-            x + width / 2,
-            y + height / 2
-        );
-
-        const hover =
-            Math.sin(
-                elapsed * 0.005 +
-                obstacle.seed
-            ) * 2;
-
-        ctx.translate(
-            0,
-            hover
-        );
-
-
-        /* top dome */
-
-        ctx.fillStyle =
-            COLORS.bg;
-
-        ctx.strokeStyle =
-            COLORS.blue;
-
-        ctx.lineWidth = 2;
-
-        ctx.beginPath();
-
-        ctx.ellipse(
-            0,
-            -height * 0.10,
-            width * 0.23,
-            height * 0.25,
-            0,
-            Math.PI,
-            0
-        );
-
-        ctx.fill();
-
-        ctx.stroke();
-
-
-        /* body */
-
-        ctx.beginPath();
-
-        ctx.ellipse(
-            0,
-            0,
-            width * 0.49,
-            height * 0.19,
-            0,
-            0,
-            Math.PI * 2
-        );
-
-        ctx.fillStyle =
-            COLORS.blue;
-
-        ctx.fill();
-
-
-        /* copper center */
-
-        ctx.fillStyle =
-            COLORS.copper;
-
-        ctx.beginPath();
-
-        ctx.ellipse(
-            0,
-            2,
-            width * 0.18,
-            height * 0.075,
-            0,
-            0,
-            Math.PI * 2
-        );
-
-        ctx.fill();
-
-
-        /* tiny lights */
-
-        ctx.fillStyle =
-            COLORS.copper;
-
-        for (let i = -1; i <= 1; i++) {
-
-            ctx.beginPath();
-
-            ctx.arc(
-                i * width * 0.25,
-                height * 0.06,
-                1.5,
-                0,
-                Math.PI * 2
-            );
-
-            ctx.fill();
-        }
-
-        ctx.restore();
-    }
-
-
-    /* ========================================================
-       CRATER
-    ======================================================== */
-
-    function drawCrater(obstacle) {
-
-        const x = obstacle.x;
-        const y = obstacle.y;
-
-        const width =
-            obstacle.width;
-
-        const height =
-            obstacle.height;
-
-
-        ctx.save();
-
-        /* subtle outer lip */
-
-        ctx.fillStyle =
-            "rgba(47,47,47,0.11)";
-
-        ctx.beginPath();
-
-        ctx.ellipse(
-            x + width / 2,
-            y + height * 0.68,
-            width / 2,
-            height * 0.34,
-            0,
-            0,
-            Math.PI * 2
-        );
-
-        ctx.fill();
-
-
-        /* crater interior */
-
-        ctx.fillStyle =
-            "rgba(47,47,47,0.17)";
-
-        ctx.beginPath();
-
-        ctx.ellipse(
-            x + width / 2,
-            y + height * 0.62,
-            width * 0.36,
-            height * 0.22,
-            0,
-            0,
-            Math.PI * 2
-        );
-
-        ctx.fill();
-
-
-        /* small lip highlight */
-
-        ctx.strokeStyle =
-            "rgba(196,122,69,0.24)";
-
-        ctx.lineWidth = 1.4;
-
-        ctx.beginPath();
-
-        ctx.arc(
-            x + width * 0.50,
-            y + height * 0.56,
-            width * 0.34,
-            Math.PI * 1.08,
-            Math.PI * 1.92
-        );
-
-        ctx.stroke();
-
-        ctx.restore();
-    }
-
-
-    /* ========================================================
-       DEBRIS
-    ======================================================== */
-
-    function drawDebrisPiece(piece) {
-
-        ctx.save();
-
-        ctx.translate(
-            piece.x,
-            piece.y
-        );
-
-        ctx.rotate(piece.rotation);
-
-        ctx.fillStyle =
-            "rgba(47,47,47,0.28)";
-
-        ctx.beginPath();
-
-        ctx.moveTo(
-            -piece.size,
-            piece.size * .3
-        );
-
-        ctx.lineTo(
-            -piece.size * .3,
-            -piece.size
-        );
-
-        ctx.lineTo(
-            piece.size,
-            -piece.size * .25
-        );
-
-        ctx.lineTo(
-            piece.size * .25,
-            piece.size
-        );
-
-        ctx.closePath();
-
-        ctx.fill();
-
-        ctx.restore();
-    }
-
-
-    /* ========================================================
-       AVI
-    ======================================================== */
-
-    function drawAvi() {
-
-        const x = avi.x;
-        const y =
-            avi.y +
-            Math.sin(avi.bob) * 1.2;
-
-        const w =
-            avi.width;
-
-        const h =
-            avi.height;
-
-
-        ctx.save();
-
-        ctx.translate(
-            x,
-            y
-        );
-
-
-        /* shadow */
-
-        if (avi.grounded) {
-
-            ctx.fillStyle =
-                "rgba(47,47,47,0.12)";
-
-            ctx.beginPath();
-
-            ctx.ellipse(
-                w * 0.52,
-                h + 5,
-                w * 0.48,
-                5,
-                0,
-                0,
-                Math.PI * 2
-            );
-
-            ctx.fill();
-        }
-
-
-        /* backpack */
-
-        ctx.fillStyle =
-            COLORS.blue;
-
-        roundedRect(
-            w * 0.03,
-            h * 0.36,
-            w * 0.21,
-            h * 0.39,
-            6
-        );
-
-        ctx.fill();
-
-
-        /* helmet */
-
-        ctx.fillStyle =
-            COLORS.bg;
-
-        ctx.strokeStyle =
-            COLORS.blue;
-
-        ctx.lineWidth = 2;
-
-        ctx.beginPath();
-
-        ctx.arc(
-            w * 0.50,
-            h * 0.21,
-            w * 0.25,
-            0,
-            Math.PI * 2
-        );
-
-        ctx.fill();
-
-        ctx.stroke();
-
-
-        /* visor */
-
-        ctx.fillStyle =
-            COLORS.blue;
-
-        roundedRect(
-            w * 0.36,
-            h * 0.12,
-            w * 0.28,
-            h * 0.18,
-            7
-        );
-
-        ctx.fill();
-
-
-        /* body */
-
-        ctx.fillStyle =
-            COLORS.bg;
-
-        ctx.strokeStyle =
-            COLORS.blue;
-
-        ctx.lineWidth = 2;
-
-        roundedRect(
-            w * 0.28,
-            h * 0.38,
-            w * 0.44,
-            h * 0.38,
-            8
-        );
-
-        ctx.fill();
-
-        ctx.stroke();
-
-
-        /* Avenmark copper detail */
-
-        ctx.fillStyle =
-            COLORS.copper;
-
-        roundedRect(
-            w * 0.46,
-            h * 0.43,
-            w * 0.09,
-            h * 0.15,
-            2
-        );
-
-        ctx.fill();
-
-
-        /* legs */
-
-        ctx.strokeStyle =
-            COLORS.blue;
-
-        ctx.lineWidth = 5;
-
-        ctx.lineCap = "round";
-
-        const running =
-            Math.sin(
-                elapsed * 0.025
-            );
-
-        ctx.beginPath();
-
-        ctx.moveTo(
-            w * 0.40,
-            h * 0.74
-        );
-
-        ctx.lineTo(
-            w * (0.32 + running * 0.10),
-            h * 0.96
-        );
-
-        ctx.stroke();
-
-
-        ctx.beginPath();
-
-        ctx.moveTo(
-            w * 0.60,
-            h * 0.74
-        );
-
-        ctx.lineTo(
-            w * (0.70 - running * 0.10),
-            h * 0.96
-        );
-
-        ctx.stroke();
-
-
-        /* boots */
-
-        ctx.lineWidth = 6;
-
-        ctx.beginPath();
-
-        ctx.moveTo(
-            w * (0.27 + running * 0.10),
-            h * 0.97
-        );
-
-        ctx.lineTo(
-            w * (0.39 + running * 0.10),
-            h * 0.97
-        );
-
-        ctx.stroke();
-
-
-        ctx.beginPath();
-
-        ctx.moveTo(
-            w * (0.64 - running * 0.10),
-            h * 0.97
-        );
-
-        ctx.lineTo(
-            w * (0.76 - running * 0.10),
-            h * 0.97
-        );
-
-        ctx.stroke();
-
-
-        /* laptop */
-
-        const laptopX =
-            w * 0.63;
-
-        const laptopY =
-            h * 0.48;
-
-
-        /* laptop screen */
-
-        ctx.fillStyle =
-            COLORS.blue;
-
-        roundedRect(
-            laptopX,
-            laptopY,
-            w * 0.25,
-            h * 0.17,
-            3
-        );
-
-        ctx.fill();
-
-
-        /* screen face */
-
-        ctx.fillStyle =
-            COLORS.bg;
-
-        roundedRect(
-            laptopX + 3,
-            laptopY + 3,
-            w * 0.19,
-            h * 0.10,
-            2
-        );
-
-        ctx.fill();
-
-
-        /* copper screen mark */
-
-        ctx.fillStyle =
-            COLORS.copper;
-
-        ctx.fillRect(
-            laptopX + 7,
-            laptopY + 7,
-            5,
-            2
-        );
-
-
-        /* laptop base */
-
-        ctx.fillStyle =
-            COLORS.blue;
-
-        ctx.beginPath();
-
-        ctx.moveTo(
-            laptopX - 4,
-            laptopY + h * 0.17
-        );
-
-        ctx.lineTo(
-            laptopX + w * 0.28,
-            laptopY + h * 0.17
-        );
-
-        ctx.lineTo(
-            laptopX + w * 0.23,
-            laptopY + h * 0.21
-        );
-
-        ctx.lineTo(
-            laptopX,
-            laptopY + h * 0.21
-        );
-
-        ctx.closePath();
-
-        ctx.fill();
-
-
-        /* arms holding laptop */
-
-        ctx.strokeStyle =
-            COLORS.blue;
-
-        ctx.lineWidth = 5;
-
-        ctx.beginPath();
-
-        ctx.moveTo(
-            w * 0.34,
-            h * 0.47
-        );
-
-        ctx.lineTo(
-            w * 0.66,
-            h * 0.54
-        );
-
-        ctx.stroke();
-
-
-        ctx.beginPath();
-
-        ctx.moveTo(
-            w * 0.66,
-            h * 0.49
-        );
-
-        ctx.lineTo(
-            w * 0.76,
-            h * 0.55
-        );
-
-        ctx.stroke();
-
-
-        ctx.restore();
-    }
-
-
-    /* ========================================================
-       GROUND
-    ======================================================== */
-
-    function drawGround(width) {
-
-        ctx.strokeStyle =
-            "rgba(47,47,47,0.30)";
-
-        ctx.lineWidth = 1.4;
-
-        ctx.beginPath();
-
-        ctx.moveTo(
-            0,
-            groundY + 1
-        );
-
-        ctx.lineTo(
-            width,
-            groundY + 1
-        );
-
-        ctx.stroke();
-
-
-        /* very subtle lunar marks */
-
-        const spacing = 120;
-
-        for (
-            let x = -spacing + groundOffset;
-            x < width + spacing;
-            x += spacing
-        ) {
-
-            ctx.strokeStyle =
-                "rgba(47,47,47,0.08)";
-
-            ctx.beginPath();
-
-            ctx.moveTo(
-                x,
-                groundY + 13
-            );
-
-            ctx.lineTo(
-                x + 28,
-                groundY + 13
-            );
-
-            ctx.stroke();
-        }
-    }
-
-
-    /* ========================================================
-       CONTINUE MESSAGE
-    ======================================================== */
-
-    function drawMessage(width) {
-
-        if (
-            !currentMessage ||
-            messageAlpha <= 0
-        ) {
+        if (!gameStarted || !running) {
+            startGame();
             return;
         }
 
-        ctx.save();
-
-        ctx.globalAlpha =
-            messageAlpha;
-
-        ctx.fillStyle =
-            COLORS.copper;
-
-        ctx.font =
-            "700 12px Montserrat, sans-serif";
-
-        ctx.textAlign = "center";
-
-        ctx.fillText(
-            currentMessage,
-            width / 2,
-            48
-        );
-
-        ctx.restore();
+        jump();
     }
 
-
-    /* ========================================================
-       DRAW
-    ======================================================== */
-
-    function draw() {
-
-        const width =
-            canvas.clientWidth;
-
-        const height =
-            canvas.clientHeight;
-
-        if (!width || !height) {
-            return;
-        }
-
-
-        ctx.clearRect(
-            0,
-            0,
-            width,
-            height
-        );
-
-
-        ctx.fillStyle =
-            COLORS.bg;
-
-        ctx.fillRect(
-            0,
-            0,
-            width,
-            height
-        );
-
-
-        drawStars();
-
-        drawGround(width);
-
-
-        for (const piece of debris) {
-
-            drawDebrisPiece(piece);
-        }
-
-
-        for (const obstacle of obstacles) {
-
-            if (obstacle.type === "ufo") {
-
-                drawUFO(obstacle);
-
-            } else {
-
-                drawCrater(obstacle);
-            }
-        }
-
-
-        drawAvi();
-
-        drawMessage(width);
+    if (event.code === "KeyP") {
+        togglePause();
     }
 
-
-    /* ========================================================
-       GAME LOOP
-    ======================================================== */
-
-    function gameLoop(timestamp) {
-
-        if (state !== "running") {
-
-            animationFrame = null;
-
-            return;
-        }
-
-
-        if (!lastTime) {
-
-            lastTime = timestamp;
-        }
-
-
-        let delta =
-            timestamp - lastTime;
-
-        lastTime =
-            timestamp;
-
-
-        delta =
-            Math.min(
-                delta,
-                40
-            );
-
-
-        update(delta);
-
-        draw();
-
-
-        animationFrame =
-            requestAnimationFrame(
-                gameLoop
-            );
-    }
-
-
-    /* ========================================================
-       UPDATE
-    ======================================================== */
-
-    function update(delta) {
-
-        elapsed += delta;
-
-
-        const movement =
-            gameSpeed *
-            delta;
-
-
-        distance += movement;
-
-        score =
-            Math.floor(
-                distance / 12
-            );
-
-
-        groundOffset -=
-            movement * 0.65;
-
-        if (groundOffset < -120) {
-
-            groundOffset += 120;
-        }
-
-
-        avi.bob +=
-            delta * 0.018;
-
-
-        updateAvi(delta);
-
-        updateObstacles(movement);
-
-        updateDebris(movement);
-
-        updateMessage(delta);
-
-        updateScore();
-
-
-        if (
-            score > 0 &&
-            score % 500 === 0 &&
-            Math.floor(
-                distance / 12
-            ) !==
-            Math.floor(
-                (distance - movement) / 12
-            )
-        ) {
-
-            currentMessage =
-                "Continue plz :)";
-
-            messageAlpha = 1;
-
-            messageTimer = 1900;
-
-            playMilestoneSound();
-        }
-    }
-
-
-    /* ========================================================
-       AVI UPDATE
-    ======================================================== */
-
-    function updateAvi(delta) {
-
-        if (!avi.grounded) {
-
-            avi.velocityY +=
-                avi.gravity *
-                delta;
-
-            avi.y +=
-                avi.velocityY *
-                delta;
-
-
-            if (
-                avi.y >=
-                groundY - avi.height
-            ) {
-
-                avi.y =
-                    groundY - avi.height;
-
-                avi.velocityY = 0;
-
-                avi.grounded = true;
-            }
-        }
-    }
-
-
-    /* ========================================================
-       OBSTACLES
-    ======================================================== */
-
-    function updateObstacles(movement) {
-
-        obstacleTimer += movement;
-
-        if (
-            obstacleTimer >=
-            nextObstacle
-        ) {
-
-            spawnObstacle();
-
-            obstacleTimer = 0;
-
-            const difficulty =
-                Math.min(
-                    score / 3500,
-                    1
-                );
-
-            const minimum =
-                850 -
-                difficulty * 170;
-
-            const maximum =
-                1450 -
-                difficulty * 260;
-
-            nextObstacle =
-                randomBetween(
-                    minimum,
-                    maximum
-                );
-        }
-
-
-        for (
-            let i = obstacles.length - 1;
-            i >= 0;
-            i--
-        ) {
-
-            const obstacle =
-                obstacles[i];
-
-            obstacle.x -= movement;
-
-
-            if (
-                obstacle.x +
-                obstacle.width <
-                -40
-            ) {
-
-                obstacles.splice(
-                    i,
-                    1
-                );
-
-                continue;
-            }
-
-
-            if (
-                collision(
-                    avi,
-                    obstacle
-                )
-            ) {
-
-                endGame();
-
-                return;
-            }
-        }
-    }
-
-
-    function spawnObstacle() {
-
-        const width =
-            canvas.clientWidth;
-
-        const useUFO =
-            score >= 250 &&
-            Math.random() < 0.38;
-
-
-        if (useUFO) {
-
-            const obstacleWidth =
-                randomBetween(
-                    48,
-                    62
-                );
-
-            const obstacleHeight =
-                randomBetween(
-                    27,
-                    34
-                );
-
-            obstacles.push({
-
-                type: "ufo",
-
-                x:
-                    width + 40,
-
-                y:
-                    groundY -
-                    randomBetween(
-                        78,
-                        132
-                    ),
-
-                width:
-                    obstacleWidth,
-
-                height:
-                    obstacleHeight,
-
-                seed:
-                    Math.random() * 100
-            });
-
-        } else {
-
-            const obstacleWidth =
-                randomBetween(
-                    48,
-                    72
-                );
-
-            const obstacleHeight =
-                randomBetween(
-                    19,
-                    27
-                );
-
-            obstacles.push({
-
-                type: "crater",
-
-                x:
-                    width + 40,
-
-                y:
-                    groundY -
-                    obstacleHeight * 0.75,
-
-                width:
-                    obstacleWidth,
-
-                height:
-                    obstacleHeight
-            });
-        }
-    }
-
-
-    /* ========================================================
-       DEBRIS
-    ======================================================== */
-
-    function updateDebris(movement) {
-
-        debrisTimer += movement;
-
-        if (
-            debrisTimer >=
-            nextDebris
-        ) {
-
-            spawnDebris();
-
-            debrisTimer = 0;
-
-            nextDebris =
-                randomBetween(
-                    650,
-                    1300
-                );
-        }
-
-
-        for (
-            let i = debris.length - 1;
-            i >= 0;
-            i--
-        ) {
-
-            const piece =
-                debris[i];
-
-            piece.x -=
-                movement * 0.65;
-
-            piece.rotation +=
-                0.002 * movement;
-
-
-            if (
-                piece.x <
-                -20
-            ) {
-
-                debris.splice(
-                    i,
-                    1
-                );
-            }
-        }
-    }
-
-
-    function spawnDebris() {
-
-        const width =
-            canvas.clientWidth;
-
-        debris.push({
-
-            x:
-                width + 30,
-
-            y:
-                randomBetween(
-                    groundY + 17,
-                    groundY + 35
-                ),
-
-            size:
-                randomBetween(
-                    2,
-                    4
-                ),
-
-            rotation:
-                Math.random() *
-                Math.PI * 2
-        });
-    }
-
-
-    /* ========================================================
-       COLLISION
-    ======================================================== */
-
-    function collision(
-        player,
-        obstacle
-    ) {
-
-        let px =
-            player.x +
-            player.width * 0.25;
-
-        let py =
-            player.y +
-            player.height * 0.12;
-
-        let pw =
-            player.width * 0.52;
-
-        let ph =
-            player.height * 0.83;
-
-
-        if (
-            obstacle.type === "ufo"
-        ) {
-
-            return (
-                px <
-                    obstacle.x +
-                    obstacle.width * 0.82 &&
-
-                px + pw >
-                    obstacle.x +
-                    obstacle.width * 0.18 &&
-
-                py <
-                    obstacle.y +
-                    obstacle.height * 0.80 &&
-
-                py + ph >
-                    obstacle.y +
-                    obstacle.height * 0.20
-            );
-        }
-
-
-        return (
-            px <
-                obstacle.x +
-                obstacle.width * 0.90 &&
-
-            px + pw >
-                obstacle.x +
-                obstacle.width * 0.10 &&
-
-            py + ph >
-                obstacle.y +
-                obstacle.height * 0.30
-        );
-    }
-
-
-    /* ========================================================
-       MESSAGE
-    ======================================================== */
-
-    function updateMessage(delta) {
-
-        if (!currentMessage) {
-            return;
-        }
-
-        messageTimer -= delta;
-
-        if (messageTimer <= 0) {
-
-            messageAlpha -=
-                delta / 450;
-
-            if (messageAlpha <= 0) {
-
-                messageAlpha = 0;
-
-                currentMessage = "";
-            }
-        }
-    }
-
-
-    /* ========================================================
-       SCORE
-    ======================================================== */
-
-    function updateScore() {
-
-        scoreDisplay.textContent =
-            score.toString();
-
-        highScoreDisplay.textContent =
-            highScore.toString();
-    }
-
-
-    /* ========================================================
-       START
-    ======================================================== */
-
-    async function startGame() {
-
-        await resumeAudio();
-
-        state = "running";
-
-        hideScreen(
-            startScreen
-        );
-
-        hideScreen(
-            gameOverScreen
-        );
-
-        hideScreen(
-            pauseScreen
-        );
-
-
-        pauseButton.disabled = false;
-
-        resetButton.disabled = false;
-
-
-        lastTime = 0;
-
-        if (!animationFrame) {
-
-            animationFrame =
-                requestAnimationFrame(
-                    gameLoop
-                );
-        }
-    }
-
-
-    /* ========================================================
-       PAUSE
-    ======================================================== */
-
-    function pauseGame() {
-
-        if (
-            state !== "running"
-        ) {
-            return;
-        }
-
-        state = "paused";
-
-        hideScreen(
-            startScreen
-        );
-
-        hideScreen(
-            gameOverScreen
-        );
-
-        showScreen(
-            pauseScreen
-        );
-
-        pauseButton.textContent =
-            "Resume";
-
-        if (animationFrame) {
-
-            cancelAnimationFrame(
-                animationFrame
-            );
-
-            animationFrame = null;
-        }
-
-        draw();
-    }
-
-
-    /* ========================================================
-       RESUME
-    ======================================================== */
-
-    async function resumeGame() {
-
-        if (
-            state !== "paused"
-        ) {
-            return;
-        }
-
-        await resumeAudio();
-
-        state = "running";
-
-        hideScreen(
-            pauseScreen
-        );
-
-        pauseButton.textContent =
-            "Pause";
-
-        lastTime = 0;
-
-        animationFrame =
-            requestAnimationFrame(
-                gameLoop
-            );
-    }
-
-
-    /* ========================================================
-       RESET
-    ======================================================== */
-
-    function resetGame() {
-
-        state = "ready";
-
-        if (animationFrame) {
-
-            cancelAnimationFrame(
-                animationFrame
-            );
-
-            animationFrame = null;
-        }
-
-
-        distance = 0;
-
-        score = 0;
-
-        elapsed = 0;
-
-        lastTime = 0;
-
-        obstacleTimer = 0;
-
-        debrisTimer = 0;
-
-        nextObstacle =
-            randomBetween(
-                1050,
-                1650
-            );
-
-        nextDebris =
-            randomBetween(
-                500,
-                1100
-            );
-
-
-        obstacles = [];
-
-        debris = [];
-
-
-        currentMessage = "";
-
-        messageAlpha = 0;
-
-        messageTimer = 0;
-
-
-        avi.velocityY = 0;
-
-        avi.grounded = true;
-
-        avi.y =
-            groundY -
-            avi.height;
-
-
-        pauseButton.textContent =
-            "Pause";
-
-
-        showScreen(
-            startScreen
-        );
-
-        hideScreen(
-            pauseScreen
-        );
-
-        hideScreen(
-            gameOverScreen
-        );
-
-
-        updateScore();
-
-        draw();
-    }
-
-
-    /* ========================================================
-       GAME OVER
-    ======================================================== */
-
-    function endGame() {
-
-        if (
-            state === "gameover"
-        ) {
-            return;
-        }
-
-
-        state = "gameover";
-
-
-        if (score > highScore) {
-
-            highScore = score;
-
-            localStorage.setItem(
-                "avenmark-avi-high-score",
-                highScore.toString()
-            );
-        }
-
-
-        finalScoreDisplay.textContent =
-            score.toString();
-
-
-        updateScore();
-
-        playCrashSound();
-
-
-        showScreen(
-            gameOverScreen
-        );
-
-        hideScreen(
-            pauseScreen
-        );
-
-        hideScreen(
-            startScreen
-        );
-
-
-        pauseButton.textContent =
-            "Pause";
-
-
-        if (animationFrame) {
-
-            cancelAnimationFrame(
-                animationFrame
-            );
-
-            animationFrame = null;
-        }
-
-        draw();
-    }
-
-
-    /* ========================================================
-       JUMP
-    ======================================================== */
-
-    async function jump() {
-
-        if (
-            state !== "running"
-        ) {
-            return;
-        }
-
-        if (
-            !avi.grounded
-        ) {
-            return;
-        }
-
-        await resumeAudio();
-
-        avi.grounded = false;
-
-        avi.velocityY =
-            avi.jumpForce;
-
-        playJumpSound();
-    }
-
-
-    /* ========================================================
-       SCREEN HELPERS
-    ======================================================== */
-
-    function showScreen(screen) {
-
-        screen.classList.add(
-            "active"
-        );
-    }
-
-
-    function hideScreen(screen) {
-
-        screen.classList.remove(
-            "active"
-        );
-    }
-
-
-    /* ========================================================
-       CONTROLS
-    ======================================================== */
-
-    startButton.addEventListener(
-        "click",
-        startGame
-    );
-
-
-    restartButton.addEventListener(
-        "click",
-        async () => {
-
-            resetGame();
-
-            await startGame();
-        }
-    );
-
-
-    resumeButton.addEventListener(
-        "click",
-        resumeGame
-    );
-
-
-    pauseButton.addEventListener(
-        "click",
-        async () => {
-
-            if (
-                state === "running"
-            ) {
-
-                pauseGame();
-
-            } else if (
-                state === "paused"
-            ) {
-
-                await resumeGame();
-            }
-        }
-    );
-
-
-    resetButton.addEventListener(
-        "click",
-        resetGame
-    );
-
-
-    speedSlider.addEventListener(
-        "input",
-        () => {
-
-            speedLevel =
-                Number(
-                    speedSlider.value
-                );
-
-            gameSpeed =
-                SPEEDS[speedLevel];
-
-            speedValue.textContent =
-                speedLevel.toString();
-        }
-    );
-
-
-    soundToggle.addEventListener(
-        "change",
-        async () => {
-
-            soundEnabled =
-                soundToggle.checked;
-
-            initAudio();
-
-            if (
-                audioContext &&
-                audioContext.state ===
-                "suspended"
-            ) {
-
-                await resumeAudio();
-            }
-
-            if (masterGain) {
-
-                masterGain.gain.setTargetAtTime(
-
-                    soundEnabled
-                        ? 0.055
-                        : 0,
-
-                    audioContext.currentTime,
-
-                    0.025
-                );
-            }
-
-            if (soundEnabled) {
-
-                playTone(
-                    520,
-                    0.08,
-                    "triangle",
-                    0.035
-                );
-            }
-        }
-    );
-
-
-    /* ========================================================
-       KEYBOARD
-    ======================================================== */
-
-    window.addEventListener(
-        "keydown",
-        async (event) => {
-
-            if (
-                event.code === "Space" ||
-                event.code === "ArrowUp" ||
-                event.code === "KeyW"
-            ) {
-
-                event.preventDefault();
-
-                if (
-                    state === "ready"
-                ) {
-
-                    await startGame();
-
-                    return;
-                }
-
-                if (
-                    state === "gameover"
-                ) {
-
-                    resetGame();
-
-                    await startGame();
-
-                    return;
-                }
-
-                if (
-                    state === "paused"
-                ) {
-
-                    await resumeGame();
-
-                    return;
-                }
-
-                await jump();
-            }
-
-
-            if (
-                event.code === "KeyP"
-            ) {
-
-                if (
-                    state === "running"
-                ) {
-
-                    pauseGame();
-
-                } else if (
-                    state === "paused"
-                ) {
-
-                    await resumeGame();
-                }
-            }
-        }
-    );
-
-
-    /* ========================================================
-       POINTER / TOUCH
-    ======================================================== */
-
-    canvas.addEventListener(
-        "pointerdown",
-        async () => {
-
-            if (
-                state === "running"
-            ) {
-
-                await jump();
-            }
-        }
-    );
-
-
-    /* ========================================================
-       UTILITIES
-    ======================================================== */
-
-    function randomBetween(
-        min,
-        max
-    ) {
-
-        return (
-            Math.random() *
-            (max - min) +
-            min
-        );
-    }
-
-
-    /* ========================================================
-       INITIALIZATION
-    ======================================================== */
-
-    function initialize() {
-
-        soundEnabled =
-            soundToggle.checked;
-
-        speedLevel =
-            Number(
-                speedSlider.value
-            );
-
-        gameSpeed =
-            SPEEDS[speedLevel];
-
-
-        highScoreDisplay.textContent =
-            highScore.toString();
-
-        scoreDisplay.textContent =
-            "0";
-
-
-        resizeCanvas();
-
+    if (event.code === "KeyR") {
         resetGame();
     }
+});
 
+/* ==========================================================
+   POINTER / TOUCH
+========================================================== */
 
-    initialize();
+canvas.addEventListener(
+    "pointerdown",
+    () => {
+        if (!gameStarted || !running) {
+            startGame();
+            return;
+        }
 
-})();
+        jump();
+    }
+);
+
+/* ==========================================================
+   INITIALIZE
+========================================================== */
+
+resizeCanvas();
+
+resetAvi();
+initializeStars();
+initializeCraters();
+initializeUFOs();
+
+highScoreDisplay.textContent =
+    highScore.toString();
+
+speedSlider.value = "1";
+speedSetting = 1;
+speedValue.textContent = "1";
+
+drawGame();
