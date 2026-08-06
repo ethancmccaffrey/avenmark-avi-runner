@@ -1,0 +1,946 @@
+/* =========================================================
+   AVENMARK AVI RUNNER
+   style.css
+   ========================================================= */
+
+
+/* =========================================================
+   RESET
+   ========================================================= */
+
+* {
+    box-sizing: border-box;
+    margin: 0;
+    padding: 0;
+}
+
+html {
+    width: 100%;
+    min-height: 100%;
+    background: #050814;
+    color-scheme: dark;
+}
+
+body {
+    width: 100%;
+    min-height: 100vh;
+    min-height: 100dvh;
+
+    overflow: hidden;
+
+    background:
+        radial-gradient(
+            circle at 50% 40%,
+            #121d3b 0%,
+            #090f24 42%,
+            #050814 78%,
+            #03050c 100%
+        );
+
+    color: #f5f7ff;
+
+    font-family:
+        -apple-system,
+        BlinkMacSystemFont,
+        "Segoe UI",
+        Helvetica,
+        Arial,
+        sans-serif;
+
+    -webkit-font-smoothing: antialiased;
+    text-rendering: optimizeLegibility;
+
+    user-select: none;
+    -webkit-user-select: none;
+    -webkit-tap-highlight-color: transparent;
+}
+
+
+/* =========================================================
+   ROOT GAME SHELL
+   ========================================================= */
+
+#game-shell {
+    width: 100%;
+    min-height: 100vh;
+    min-height: 100dvh;
+
+    display: flex;
+    flex-direction: column;
+
+    position: relative;
+
+    isolation: isolate;
+}
+
+
+/* =========================================================
+   HEADER
+   ========================================================= */
+
+#game-header {
+    width: 100%;
+
+    display: grid;
+    grid-template-columns: 1fr auto 1fr;
+    align-items: center;
+
+    min-height: 76px;
+
+    padding:
+        14px
+        max(22px, env(safe-area-inset-right))
+        14px
+        max(22px, env(safe-area-inset-left));
+
+    border-bottom: 1px solid rgba(255, 255, 255, 0.08);
+
+    background:
+        rgba(3, 5, 12, 0.78);
+
+    backdrop-filter: blur(16px);
+    -webkit-backdrop-filter: blur(16px);
+
+    position: relative;
+    z-index: 20;
+}
+
+
+/* =========================================================
+   BRAND
+   ========================================================= */
+
+#brand-lockup {
+    display: flex;
+    flex-direction: column;
+
+    justify-self: start;
+
+    line-height: 1;
+}
+
+#brand-name {
+    font-size: 0.92rem;
+    font-weight: 800;
+    letter-spacing: 0.18em;
+}
+
+#brand-subtitle {
+    margin-top: 5px;
+
+    font-size: 0.57rem;
+    font-weight: 600;
+    letter-spacing: 0.28em;
+
+    opacity: 0.55;
+}
+
+
+/* =========================================================
+   GAME TITLE
+   ========================================================= */
+
+#game-title {
+    display: flex;
+    flex-direction: column;
+
+    align-items: center;
+    justify-content: center;
+
+    text-align: center;
+
+    line-height: 1;
+}
+
+#game-title-main {
+    font-size: clamp(0.9rem, 2vw, 1.15rem);
+
+    font-weight: 800;
+    letter-spacing: 0.2em;
+}
+
+#game-title-subtitle {
+    margin-top: 6px;
+
+    font-size: 0.52rem;
+    font-weight: 600;
+    letter-spacing: 0.25em;
+
+    opacity: 0.42;
+}
+
+
+/* =========================================================
+   SCORE PANEL
+   ========================================================= */
+
+#score-panel {
+    display: flex;
+    align-items: center;
+    justify-content: flex-end;
+
+    gap: clamp(18px, 3vw, 34px);
+
+    justify-self: end;
+}
+
+.score-item {
+    display: flex;
+    flex-direction: column;
+
+    align-items: flex-end;
+
+    line-height: 1;
+}
+
+.score-label {
+    margin-bottom: 5px;
+
+    font-size: 0.48rem;
+    font-weight: 700;
+
+    letter-spacing: 0.18em;
+
+    opacity: 0.45;
+}
+
+#score,
+#high-score {
+    font-family:
+        "SFMono-Regular",
+        Consolas,
+        "Liberation Mono",
+        monospace;
+
+    font-size: clamp(0.72rem, 1.7vw, 0.9rem);
+
+    font-weight: 600;
+
+    letter-spacing: 0.1em;
+}
+
+
+/* =========================================================
+   GAME CONTAINER
+   ========================================================= */
+
+#game-container {
+    flex: 1;
+
+    min-height: 0;
+
+    width: 100%;
+
+    position: relative;
+
+    overflow: hidden;
+
+    background:
+        linear-gradient(
+            180deg,
+            rgba(9, 15, 36, 0.98),
+            rgba(5, 8, 20, 0.98)
+        );
+}
+
+
+/* =========================================================
+   CANVAS
+   ========================================================= */
+
+#game-canvas {
+    display: block;
+
+    width: 100%;
+    height: 100%;
+
+    position: absolute;
+
+    inset: 0;
+
+    touch-action: none;
+}
+
+
+/* =========================================================
+   OVERLAYS
+   ========================================================= */
+
+.game-overlay {
+    position: absolute;
+
+    inset: 0;
+
+    display: flex;
+
+    align-items: center;
+    justify-content: center;
+
+    padding:
+        24px
+        max(24px, env(safe-area-inset-right))
+        24px
+        max(24px, env(safe-area-inset-left));
+
+    background:
+        rgba(3, 5, 12, 0.36);
+
+    backdrop-filter: blur(3px);
+    -webkit-backdrop-filter: blur(3px);
+
+    z-index: 10;
+
+    opacity: 1;
+
+    transition:
+        opacity 180ms ease,
+        visibility 180ms ease;
+}
+
+.game-overlay.hidden {
+    opacity: 0;
+
+    visibility: hidden;
+
+    pointer-events: none;
+}
+
+
+/* =========================================================
+   OVERLAY CARD
+   ========================================================= */
+
+.overlay-card {
+    width: min(440px, 100%);
+
+    padding: clamp(28px, 6vw, 46px);
+
+    display: flex;
+    flex-direction: column;
+
+    align-items: center;
+
+    text-align: center;
+
+    border:
+        1px solid
+        rgba(255, 255, 255, 0.12);
+
+    border-radius: 22px;
+
+    background:
+        linear-gradient(
+            145deg,
+            rgba(20, 31, 61, 0.82),
+            rgba(7, 12, 27, 0.9)
+        );
+
+    box-shadow:
+        0 25px 80px rgba(0, 0, 0, 0.42),
+        inset 0 1px 0 rgba(255, 255, 255, 0.05);
+
+    backdrop-filter: blur(22px);
+    -webkit-backdrop-filter: blur(22px);
+}
+
+
+/* =========================================================
+   OVERLAY TYPOGRAPHY
+   ========================================================= */
+
+.overlay-eyebrow {
+    margin-bottom: 13px;
+
+    font-size: 0.55rem;
+
+    font-weight: 700;
+
+    letter-spacing: 0.3em;
+
+    opacity: 0.48;
+}
+
+.overlay-card h1,
+.overlay-card h2 {
+    font-size: clamp(1.55rem, 6vw, 2.35rem);
+
+    line-height: 1;
+
+    font-weight: 800;
+
+    letter-spacing: 0.12em;
+}
+
+.overlay-description {
+    max-width: 320px;
+
+    margin-top: 15px;
+
+    font-size: 0.82rem;
+
+    line-height: 1.6;
+
+    opacity: 0.62;
+}
+
+
+/* =========================================================
+   BUTTONS
+   ========================================================= */
+
+.game-button {
+    appearance: none;
+    -webkit-appearance: none;
+
+    border: 0;
+
+    min-height: 48px;
+
+    margin-top: 27px;
+
+    padding:
+        0
+        25px;
+
+    border-radius: 999px;
+
+    background: #f5f7ff;
+
+    color: #050814;
+
+    font-family: inherit;
+
+    font-size: 0.68rem;
+
+    font-weight: 800;
+
+    letter-spacing: 0.15em;
+
+    cursor: pointer;
+
+    box-shadow:
+        0 8px 24px rgba(0, 0, 0, 0.25);
+
+    transition:
+        transform 140ms ease,
+        box-shadow 140ms ease,
+        opacity 140ms ease;
+}
+
+.game-button:hover {
+    transform: translateY(-2px);
+
+    box-shadow:
+        0 12px 28px rgba(0, 0, 0, 0.32);
+}
+
+.game-button:active {
+    transform: translateY(1px);
+
+    box-shadow:
+        0 5px 15px rgba(0, 0, 0, 0.24);
+}
+
+.game-button:focus-visible {
+    outline:
+        2px solid
+        rgba(255, 255, 255, 0.9);
+
+    outline-offset: 4px;
+}
+
+
+/* =========================================================
+   CONTROL HINT
+   ========================================================= */
+
+.controls-hint {
+    margin-top: 18px;
+
+    font-size: 0.51rem;
+
+    font-weight: 700;
+
+    letter-spacing: 0.16em;
+
+    opacity: 0.35;
+
+    text-transform: uppercase;
+}
+
+.mobile-controls {
+    display: none;
+}
+
+
+/* =========================================================
+   FINAL SCORE
+   ========================================================= */
+
+#final-score-panel {
+    width: 100%;
+
+    display: flex;
+
+    justify-content: center;
+
+    gap: 38px;
+
+    margin-top: 24px;
+}
+
+.final-score-item {
+    display: flex;
+
+    flex-direction: column;
+
+    align-items: center;
+
+    min-width: 80px;
+}
+
+.final-score-label {
+    margin-bottom: 7px;
+
+    font-size: 0.5rem;
+
+    font-weight: 700;
+
+    letter-spacing: 0.2em;
+
+    opacity: 0.4;
+}
+
+#final-score,
+#final-high-score {
+    font-family:
+        "SFMono-Regular",
+        Consolas,
+        "Liberation Mono",
+        monospace;
+
+    font-size: 1rem;
+
+    font-weight: 600;
+
+    letter-spacing: 0.08em;
+}
+
+
+/* =========================================================
+   TOUCH BUTTON
+   ========================================================= */
+
+#touch-jump {
+    appearance: none;
+    -webkit-appearance: none;
+
+    position: absolute;
+
+    right: 18px;
+    bottom: 18px;
+
+    z-index: 15;
+
+    width: 68px;
+    height: 68px;
+
+    border:
+        1px solid
+        rgba(255, 255, 255, 0.18);
+
+    border-radius: 50%;
+
+    background:
+        rgba(255, 255, 255, 0.07);
+
+    color: rgba(255, 255, 255, 0.72);
+
+    font-family: inherit;
+
+    font-size: 0.47rem;
+
+    font-weight: 800;
+
+    letter-spacing: 0.12em;
+
+    backdrop-filter: blur(10px);
+    -webkit-backdrop-filter: blur(10px);
+
+    cursor: pointer;
+
+    display: none;
+
+    touch-action: manipulation;
+}
+
+#touch-jump:active {
+    background:
+        rgba(255, 255, 255, 0.14);
+
+    transform: scale(0.96);
+}
+
+
+/* =========================================================
+   FOOTER
+   ========================================================= */
+
+#game-footer {
+    width: 100%;
+
+    min-height: 38px;
+
+    display: grid;
+
+    grid-template-columns: 1fr auto 1fr;
+
+    align-items: center;
+
+    padding:
+        8px
+        max(22px, env(safe-area-inset-right))
+        max(8px, env(safe-area-inset-bottom))
+        max(22px, env(safe-area-inset-left));
+
+    border-top:
+        1px solid
+        rgba(255, 255, 255, 0.06);
+
+    background:
+        rgba(3, 5, 12, 0.76);
+
+    color: rgba(255, 255, 255, 0.4);
+
+    font-size: 0.48rem;
+
+    font-weight: 700;
+
+    letter-spacing: 0.15em;
+
+    position: relative;
+
+    z-index: 20;
+}
+
+#mission-status {
+    display: flex;
+
+    align-items: center;
+
+    gap: 7px;
+
+    justify-self: start;
+}
+
+#status-indicator {
+    width: 6px;
+    height: 6px;
+
+    border-radius: 50%;
+
+    background: currentColor;
+
+    opacity: 0.7;
+}
+
+#footer-center {
+    justify-self: center;
+
+    opacity: 0.55;
+}
+
+#footer-right {
+    justify-self: end;
+}
+
+
+/* =========================================================
+   NOSCRIPT
+   ========================================================= */
+
+#noscript-message {
+    position: fixed;
+
+    inset: 0;
+
+    z-index: 1000;
+
+    display: flex;
+
+    flex-direction: column;
+
+    align-items: center;
+    justify-content: center;
+
+    padding: 30px;
+
+    background: #050814;
+
+    color: #f5f7ff;
+
+    text-align: center;
+}
+
+#noscript-message h1 {
+    font-size: 2rem;
+
+    letter-spacing: 0.12em;
+}
+
+#noscript-message p {
+    margin-top: 12px;
+
+    opacity: 0.6;
+}
+
+
+/* =========================================================
+   RESPONSIVE — TABLET
+   ========================================================= */
+
+@media (max-width: 760px) {
+
+    #game-header {
+        min-height: 68px;
+
+        padding-top: 12px;
+        padding-bottom: 12px;
+    }
+
+    #game-title-subtitle {
+        display: none;
+    }
+
+    #brand-name {
+        font-size: 0.78rem;
+    }
+
+    #brand-subtitle {
+        font-size: 0.5rem;
+    }
+
+    #score-panel {
+        gap: 17px;
+    }
+
+}
+
+
+/* =========================================================
+   RESPONSIVE — MOBILE
+   ========================================================= */
+
+@media (max-width: 560px) {
+
+    body {
+        overflow: hidden;
+    }
+
+    #game-header {
+        grid-template-columns: 1fr auto;
+
+        min-height: 62px;
+
+        padding-left:
+            max(16px, env(safe-area-inset-left));
+
+        padding-right:
+            max(16px, env(safe-area-inset-right));
+    }
+
+    #game-title {
+        display: none;
+    }
+
+    #brand-name {
+        font-size: 0.76rem;
+    }
+
+    #brand-subtitle {
+        margin-top: 4px;
+    }
+
+    #score-panel {
+        gap: 14px;
+    }
+
+    .score-label {
+        font-size: 0.43rem;
+    }
+
+    #score,
+    #high-score {
+        font-size: 0.68rem;
+    }
+
+    .game-overlay {
+        padding:
+            18px
+            max(18px, env(safe-area-inset-right))
+            18px
+            max(18px, env(safe-area-inset-left));
+    }
+
+    .overlay-card {
+        border-radius: 18px;
+
+        padding:
+            30px
+            22px;
+    }
+
+    .overlay-card h1,
+    .overlay-card h2 {
+        font-size: 1.45rem;
+
+        letter-spacing: 0.09em;
+    }
+
+    .overlay-description {
+        font-size: 0.75rem;
+    }
+
+    .game-button {
+        width: 100%;
+
+        min-height: 50px;
+    }
+
+    .desktop-controls {
+        display: none;
+    }
+
+    .mobile-controls {
+        display: inline;
+    }
+
+    #touch-jump {
+        display: block;
+
+        bottom:
+            max(16px, env(safe-area-inset-bottom));
+    }
+
+    #game-footer {
+        min-height: 34px;
+
+        grid-template-columns: 1fr auto;
+
+        padding-left:
+            max(16px, env(safe-area-inset-left));
+
+        padding-right:
+            max(16px, env(safe-area-inset-right));
+
+        font-size: 0.43rem;
+    }
+
+    #footer-center {
+        display: none;
+    }
+
+}
+
+
+/* =========================================================
+   VERY SMALL SCREENS
+   ========================================================= */
+
+@media (max-width: 360px) {
+
+    #game-header {
+        min-height: 58px;
+    }
+
+    #brand-name {
+        font-size: 0.68rem;
+    }
+
+    #score-panel {
+        gap: 10px;
+    }
+
+    #score,
+    #high-score {
+        font-size: 0.62rem;
+    }
+
+    .overlay-card {
+        padding:
+            25px
+            18px;
+    }
+
+    #final-score-panel {
+        gap: 22px;
+    }
+
+}
+
+
+/* =========================================================
+   SHORT SCREENS / LANDSCAPE PHONES
+   ========================================================= */
+
+@media (max-height: 560px) {
+
+    #game-header {
+        min-height: 54px;
+
+        padding-top: 8px;
+        padding-bottom: 8px;
+    }
+
+    #game-footer {
+        min-height: 30px;
+
+        padding-top: 5px;
+        padding-bottom: 5px;
+    }
+
+    .overlay-card {
+        padding:
+            22px
+            25px;
+    }
+
+    .overlay-description {
+        margin-top: 9px;
+    }
+
+    .game-button {
+        margin-top: 17px;
+
+        min-height: 42px;
+    }
+
+    .controls-hint {
+        margin-top: 11px;
+    }
+
+    #touch-jump {
+        width: 58px;
+        height: 58px;
+    }
+
+}
+
+
+/* =========================================================
+   REDUCED MOTION
+   ========================================================= */
+
+@media (prefers-reduced-motion: reduce) {
+
+    *,
+    *::before,
+    *::after {
+        scroll-behavior: auto !important;
+
+        transition-duration: 0.01ms !important;
+        animation-duration: 0.01ms !important;
+        animation-iteration-count: 1 !important;
+    }
+
+}
