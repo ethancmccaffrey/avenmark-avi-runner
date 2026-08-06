@@ -3,24 +3,22 @@
    STYLE SYSTEM
 ========================================================== */
 
-/* ==========================================================
-   AVENMARK TOKENS
-========================================================== */
-
 :root {
+
     --avenmark-bg: #F5F5F2;
     --avenmark-dark: #2F2F2F;
     --avenmark-blue: #103159;
-    --avenmark-accent: #C47A45;
+    --avenmark-copper: #C47A45;
+    --avenmark-white: #F5F5F2;
 
-    --avenmark-border: rgba(47, 47, 47, 0.10);
-    --avenmark-border-soft: rgba(47, 47, 47, 0.07);
+    --avenmark-border:
+        rgba(47, 47, 47, 0.10);
+
+    --avenmark-border-light:
+        rgba(47, 47, 47, 0.07);
 
     --avenmark-shadow:
         0 10px 30px rgba(47, 47, 47, 0.06);
-
-    --avenmark-shadow-large:
-        0 20px 50px rgba(47, 47, 47, 0.10);
 
     --avenmark-radius-sm: 12px;
     --avenmark-radius-lg: 20px;
@@ -45,37 +43,44 @@
     box-sizing: border-box;
 }
 
-html,
-body {
-    width: 100%;
-    height: 100%;
-}
 
 html {
-    background: var(--avenmark-bg);
-    -webkit-tap-highlight-color: transparent;
+    width: 100%;
+    min-height: 100%;
 }
 
+
 body {
+    width: 100%;
+    min-height: 100vh;
+
     background: var(--avenmark-bg);
     color: var(--avenmark-dark);
+
     font-family: var(--avenmark-font);
-    overflow: hidden;
-    line-height: 1.5;
+
+    -webkit-font-smoothing: antialiased;
+    text-rendering: optimizeLegibility;
+}
+
+
+button,
+input {
+    font-family: inherit;
 }
 
 
 /* ==========================================================
-   MAIN APPLICATION
+   APP
 ========================================================== */
 
-.avi-runner {
+.app {
+
     width: 100%;
-    height: 100dvh;
     min-height: 100vh;
 
-    display: grid;
-    grid-template-rows: 80px minmax(0, 1fr) auto;
+    display: flex;
+    flex-direction: column;
 
     background: var(--avenmark-bg);
 }
@@ -86,176 +91,208 @@ body {
 ========================================================== */
 
 .app-header {
+
     width: 100%;
-    height: 80px;
+
+    min-height: 82px;
 
     display: flex;
     align-items: center;
     justify-content: space-between;
 
-    padding: 0 28px;
+    gap: 24px;
+
+    padding:
+        16px
+        clamp(18px, 4vw, 42px);
 
     background: var(--avenmark-bg);
 
     border-bottom:
         1px solid var(--avenmark-border);
 
-    position: relative;
-    z-index: 20;
+    flex-shrink: 0;
 }
 
 
-/* ==========================================================
-   BRAND
-========================================================== */
-
 .brand {
+
     display: flex;
     align-items: center;
+
     gap: 15px;
 
     min-width: 0;
 }
 
-.logo {
-    width: 50px;
-    height: 50px;
+
+.brand-logo {
+
+    width: 48px;
+    height: 48px;
 
     object-fit: contain;
 
-    display: block;
-
-    flex: 0 0 auto;
-
-    transition:
-        transform 0.25s ease;
+    flex-shrink: 0;
 }
 
-.brand:hover .logo {
-    transform: scale(1.04);
+
+.brand-title {
+
+    min-width: 0;
 }
 
-.brand-copy {
-    display: flex;
-    align-items: center;
-}
 
-.brand h1 {
-    margin: 0;
+.brand-title h1 {
 
     color: var(--avenmark-dark);
 
-    font-family: var(--avenmark-font);
+    font-size:
+        clamp(17px, 2.2vw, 23px);
 
-    font-size: 22px;
+    line-height: 1.15;
+
     font-weight: 700;
 
-    letter-spacing: 0.2px;
+    letter-spacing:
+        -0.35px;
 
     white-space: nowrap;
 }
 
 
-/* ==========================================================
-   HEADER CONTROLS
-========================================================== */
-
 .header-controls {
+
     display: flex;
     align-items: center;
-    gap: 10px;
+
+    gap: 9px;
+
+    flex-shrink: 0;
 }
 
+
 .header-button {
+
     appearance: none;
-    -webkit-appearance: none;
 
     border: 1px solid var(--avenmark-border);
 
-    background: var(--avenmark-bg);
+    background: transparent;
+
     color: var(--avenmark-dark);
 
-    border-radius: var(--avenmark-radius-pill);
+    border-radius:
+        var(--avenmark-radius-pill);
 
-    padding: 10px 20px;
+    padding:
+        9px 17px;
 
-    font-family: var(--avenmark-font);
     font-size: 13px;
-    font-weight: 600;
+
+    font-weight: 700;
 
     cursor: pointer;
 
     transition:
-        transform 0.2s ease,
-        background 0.2s ease,
-        border-color 0.2s ease,
-        color 0.2s ease;
+        transform .2s ease,
+        background .2s ease,
+        border-color .2s ease;
 }
 
-.header-button:hover {
-    transform: translateY(-2px);
 
-    border-color:
-        rgba(196, 122, 69, 0.35);
+.header-button:hover {
+
+    transform: translateY(-1px);
 
     background:
         rgba(196, 122, 69, 0.08);
+
+    border-color:
+        rgba(196, 122, 69, 0.30);
 }
 
+
 .header-button:active {
+
     transform: translateY(0);
 }
 
-.header-button:focus-visible,
-.primary-button:focus-visible,
-input:focus-visible {
-    outline:
-        3px solid rgba(196, 122, 69, 0.28);
 
-    outline-offset: 3px;
+.header-button:disabled {
+
+    opacity: .45;
+
+    cursor: default;
+
+    transform: none;
 }
 
 
 /* ==========================================================
-   GAME AREA
+   GAME SECTION
 ========================================================== */
 
-.game-area {
-    position: relative;
-
-    min-height: 0;
+.game-section {
 
     width: 100%;
 
-    overflow: hidden;
+    flex: 1;
 
-    background: var(--avenmark-bg);
+    display: flex;
+
+    justify-content: center;
+
+    align-items: stretch;
+
+    padding:
+        clamp(18px, 3vw, 34px)
+        clamp(18px, 4vw, 42px)
+        18px;
 }
 
 
-/*
-   The canvas IS the game.
+.game-card {
 
-   The JavaScript draws the subtle space scene,
-   terrain, Avi, UFOs, craters and stars.
-*/
+    position: relative;
+
+    width: 100%;
+
+    max-width: 1500px;
+
+    min-height: 420px;
+
+    flex: 1;
+
+    overflow: hidden;
+
+    border-radius:
+        var(--avenmark-radius-lg);
+
+    border:
+        1px solid var(--avenmark-border);
+
+    background:
+        var(--avenmark-bg);
+
+    box-shadow:
+        var(--avenmark-shadow);
+}
+
 
 #game-canvas {
-    position: absolute;
-
-    inset: 0;
 
     display: block;
 
     width: 100%;
     height: 100%;
 
-    background: var(--avenmark-bg);
+    min-height: 420px;
 
-    touch-action: manipulation;
+    background:
+        var(--avenmark-bg);
 
-    user-select: none;
-    -webkit-user-select: none;
+    touch-action: none;
 }
 
 
@@ -264,6 +301,7 @@ input:focus-visible {
 ========================================================== */
 
 .game-screen {
+
     position: absolute;
 
     inset: 0;
@@ -276,380 +314,273 @@ input:focus-visible {
     padding: 30px;
 
     background:
-        rgba(245, 245, 242, 0.72);
+        rgba(245, 245, 242, 0.90);
 
-    backdrop-filter: blur(8px);
-    -webkit-backdrop-filter: blur(8px);
+    backdrop-filter:
+        blur(8px);
 
-    z-index: 10;
+    -webkit-backdrop-filter:
+        blur(8px);
 
-    opacity: 1;
-    visibility: visible;
-
-    transition:
-        opacity 0.25s ease,
-        visibility 0.25s ease;
-}
-
-.game-screen.hidden {
     opacity: 0;
+
     visibility: hidden;
 
     pointer-events: none;
+
+    transition:
+        opacity .25s ease,
+        visibility .25s ease;
 }
 
 
-/* ==========================================================
-   SCREEN CARD
-========================================================== */
+.game-screen.active {
 
-.screen-card {
-    width: min(430px, 100%);
+    opacity: 1;
 
-    padding: 38px 34px;
+    visibility: visible;
+
+    pointer-events: auto;
+}
+
+
+.screen-content {
+
+    width: min(420px, 100%);
 
     text-align: center;
 
-    background: var(--avenmark-bg);
+    padding:
+        clamp(28px, 5vw, 46px);
+
+    border-radius:
+        var(--avenmark-radius-lg);
 
     border:
         1px solid var(--avenmark-border);
 
-    border-radius: var(--avenmark-radius-lg);
+    background:
+        var(--avenmark-bg);
 
-    box-shadow: var(--avenmark-shadow-large);
-
-    animation:
-        screen-card-in 0.35s ease both;
-}
-
-@keyframes screen-card-in {
-    from {
-        opacity: 0;
-        transform: translateY(10px);
-    }
-
-    to {
-        opacity: 1;
-        transform: translateY(0);
-    }
+    box-shadow:
+        0 18px 50px
+        rgba(47, 47, 47, 0.08);
 }
 
 
-/* ==========================================================
-   SCREEN MARK
-========================================================== */
+.screen-eyebrow {
 
-.screen-mark {
-    display: inline-flex;
+    margin-bottom: 13px;
 
-    align-items: center;
-    justify-content: center;
-
-    min-width: 54px;
-    height: 34px;
-
-    padding: 0 12px;
-
-    margin-bottom: 20px;
-
-    border-radius: var(--avenmark-radius-pill);
-
-    background: var(--avenmark-dark);
-    color: var(--avenmark-bg);
-
-    font-family: var(--avenmark-font);
+    color: var(--avenmark-copper);
 
     font-size: 11px;
+
     font-weight: 800;
 
-    letter-spacing: 1.5px;
+    letter-spacing: 1.7px;
 }
 
 
-/* ==========================================================
-   SCREEN TYPOGRAPHY
-========================================================== */
+.screen-content h2 {
 
-.screen-card h2 {
-    margin-bottom: 10px;
+    margin-bottom: 11px;
 
     color: var(--avenmark-dark);
 
-    font-family: var(--avenmark-font);
+    font-size:
+        clamp(26px, 4vw, 38px);
 
-    font-size: clamp(25px, 4vw, 32px);
+    line-height: 1.15;
+
     font-weight: 800;
 
-    line-height: 1.2;
-
-    letter-spacing: -0.6px;
+    letter-spacing: -0.8px;
 }
 
-.screen-card p {
-    max-width: 330px;
 
-    margin: 0 auto 24px;
+.screen-copy {
 
-    color:
-        rgba(47, 47, 47, 0.66);
-
-    font-family: var(--avenmark-font);
+    color: rgba(47, 47, 47, 0.62);
 
     font-size: 14px;
+
     font-weight: 500;
 
-    line-height: 1.7;
+    margin-bottom: 25px;
 }
 
 
-/* ==========================================================
-   PRIMARY BUTTON
-========================================================== */
+.final-score {
+
+    margin-bottom: 24px;
+
+    color: rgba(47, 47, 47, 0.65);
+
+    font-size: 14px;
+}
+
+
+.final-score strong {
+
+    color: var(--avenmark-copper);
+
+    font-weight: 800;
+}
+
 
 .primary-button {
+
     appearance: none;
-    -webkit-appearance: none;
 
-    border: none;
+    border: 0;
 
-    min-width: 120px;
+    border-radius:
+        var(--avenmark-radius-pill);
 
-    padding: 11px 24px;
+    padding:
+        11px 25px;
 
-    border-radius: var(--avenmark-radius-pill);
+    background:
+        var(--avenmark-copper);
 
-    background: var(--avenmark-accent);
-    color: var(--avenmark-bg);
-
-    font-family: var(--avenmark-font);
+    color:
+        var(--avenmark-white);
 
     font-size: 13px;
+
     font-weight: 700;
 
     cursor: pointer;
 
+    box-shadow:
+        0 8px 20px
+        rgba(196, 122, 69, 0.16);
+
     transition:
-        transform 0.2s ease,
-        opacity 0.2s ease,
-        box-shadow 0.2s ease;
+        transform .2s ease,
+        opacity .2s ease;
 }
+
 
 .primary-button:hover {
+
     transform: translateY(-2px);
-
-    opacity: 0.92;
-
-    box-shadow:
-        0 8px 20px rgba(196, 122, 69, 0.18);
 }
 
+
 .primary-button:active {
+
     transform: translateY(0);
 }
 
 
 /* ==========================================================
-   SCREEN HINT
+   CONTROL PANEL
 ========================================================== */
 
-.screen-hint {
-    display: block;
+.control-panel {
 
-    margin-top: 18px;
+    width: calc(100% - clamp(36px, 8vw, 84px));
 
-    color:
-        rgba(47, 47, 47, 0.45);
+    max-width: 1500px;
 
-    font-family: var(--avenmark-font);
+    margin:
+        0 auto
+        clamp(18px, 3vw, 32px);
 
-    font-size: 11px;
-    font-weight: 500;
+    padding:
+        16px 20px;
 
-    letter-spacing: 0.2px;
-}
+    display: grid;
 
-
-/* ==========================================================
-   GAME OVER
-========================================================== */
-
-.game-over-score {
-    display: flex;
-
-    justify-content: center;
-    gap: 36px;
-
-    margin: 24px 0;
-}
-
-.game-over-score div {
-    display: flex;
-
-    flex-direction: column;
-
-    gap: 4px;
-}
-
-.game-over-score span {
-    color:
-        rgba(47, 47, 47, 0.48);
-
-    font-family: var(--avenmark-font);
-
-    font-size: 10px;
-    font-weight: 700;
-
-    text-transform: uppercase;
-
-    letter-spacing: 1px;
-}
-
-.game-over-score strong {
-    color: var(--avenmark-dark);
-
-    font-family: var(--avenmark-font);
-
-    font-size: 25px;
-    font-weight: 800;
-}
-
-
-/* ==========================================================
-   500-POINT MESSAGE
-========================================================== */
-
-.milestone-message {
-    position: absolute;
-
-    top: 13%;
-
-    left: 50%;
-
-    transform:
-        translate(-50%, -8px);
-
-    z-index: 5;
-
-    pointer-events: none;
-
-    opacity: 0;
-
-    color: var(--avenmark-accent);
-
-    font-family: var(--avenmark-font);
-
-    font-size: 13px;
-    font-weight: 700;
-
-    letter-spacing: 0.3px;
-
-    white-space: nowrap;
-
-    text-shadow:
-        0 2px 10px rgba(245, 245, 242, 0.85);
-
-    transition:
-        opacity 0.25s ease,
-        transform 0.25s ease;
-}
-
-.milestone-message.show {
-    opacity: 1;
-
-    transform:
-        translate(-50%, 0);
-}
-
-
-/* ==========================================================
-   BOTTOM CONTROL PANEL
-========================================================== */
-
-.game-panel {
-    position: relative;
-
-    z-index: 20;
-
-    width: 100%;
-
-    min-height: 88px;
-
-    display: flex;
+    grid-template-columns:
+        minmax(100px, .7fr)
+        minmax(120px, .8fr)
+        minmax(190px, 1.3fr)
+        auto;
 
     align-items: center;
-    justify-content: center;
 
-    gap: 42px;
+    gap: 25px;
 
-    padding: 14px 28px;
+    background:
+        var(--avenmark-bg);
 
-    background: var(--avenmark-bg);
-
-    border-top:
+    border:
         1px solid var(--avenmark-border);
 
+    border-radius:
+        var(--avenmark-radius-lg);
+
     box-shadow:
-        0 -8px 25px rgba(47, 47, 47, 0.025);
+        var(--avenmark-shadow);
+
+    flex-shrink: 0;
 }
 
 
-/* ==========================================================
-   PANEL STAT
-========================================================== */
+.stat-block,
+.setting-block {
 
-.panel-stat,
-.panel-control {
+    min-width: 0;
+}
+
+
+.panel-label {
+
+    display: block;
+
+    margin-bottom: 5px;
+
+    color:
+        rgba(47, 47, 47, 0.50);
+
+    font-size: 10px;
+
+    line-height: 1.2;
+
+    font-weight: 700;
+
+    letter-spacing: 1.1px;
+
+    text-transform: uppercase;
+}
+
+
+.panel-value {
+
+    display: block;
+
+    color: var(--avenmark-dark);
+
+    font-size: 19px;
+
+    line-height: 1.2;
+
+    font-weight: 800;
+}
+
+
+.setting-heading {
+
     display: flex;
 
     align-items: center;
-}
 
-.panel-stat {
-    gap: 12px;
-}
+    justify-content: space-between;
 
-.panel-control {
-    gap: 10px;
+    gap: 15px;
 }
 
 
-/* ==========================================================
-   PANEL LABELS
-========================================================== */
+.setting-value {
 
-.panel-label {
-    color:
-        rgba(47, 47, 47, 0.52);
+    color: var(--avenmark-copper);
 
-    font-family: var(--avenmark-font);
+    font-size: 12px;
 
-    font-size: 10px;
-    font-weight: 700;
-
-    text-transform: uppercase;
-
-    letter-spacing: 1px;
-
-    white-space: nowrap;
-}
-
-
-/* ==========================================================
-   PANEL VALUES
-========================================================== */
-
-.panel-value {
-    color: var(--avenmark-dark);
-
-    font-family: var(--avenmark-font);
-
-    font-size: 18px;
     font-weight: 800;
-
-    min-width: 42px;
-
-    font-variant-numeric: tabular-nums;
 }
 
 
@@ -657,36 +588,23 @@ input:focus-visible {
    SPEED SLIDER
 ========================================================== */
 
-.slider-row {
-    display: flex;
-
-    align-items: center;
-
-    gap: 7px;
-}
-
-.slider-value {
-    color: var(--avenmark-accent);
-
-    font-family: var(--avenmark-font);
-
-    font-size: 14px;
-    font-weight: 800;
-
-    user-select: none;
-}
-
 #speed-slider {
+
+    width: 100%;
+
+    height: 5px;
+
+    margin-top: 8px;
+
     appearance: none;
+
     -webkit-appearance: none;
 
-    width: 110px;
-    height: 4px;
-
-    border-radius: var(--avenmark-radius-pill);
+    border-radius:
+        var(--avenmark-radius-pill);
 
     background:
-        rgba(47, 47, 47, 0.16);
+        rgba(47, 47, 47, 0.13);
 
     outline: none;
 
@@ -694,436 +612,359 @@ input:focus-visible {
 }
 
 
-/* WebKit slider */
-
 #speed-slider::-webkit-slider-thumb {
+
     appearance: none;
     -webkit-appearance: none;
 
     width: 16px;
     height: 16px;
 
-    border: 2px solid var(--avenmark-bg);
-
     border-radius: 50%;
 
-    background: var(--avenmark-accent);
+    background:
+        var(--avenmark-copper);
+
+    border:
+        2px solid var(--avenmark-bg);
 
     box-shadow:
-        0 2px 7px rgba(47, 47, 47, 0.14);
+        0 0 0 1px
+        rgba(196, 122, 69, 0.35);
 
     cursor: pointer;
 }
 
 
-/* Firefox slider */
-
 #speed-slider::-moz-range-thumb {
+
     width: 16px;
     height: 16px;
 
-    border: 2px solid var(--avenmark-bg);
-
     border-radius: 50%;
 
-    background: var(--avenmark-accent);
+    background:
+        var(--avenmark-copper);
+
+    border:
+        2px solid var(--avenmark-bg);
 
     box-shadow:
-        0 2px 7px rgba(47, 47, 47, 0.14);
+        0 0 0 1px
+        rgba(196, 122, 69, 0.35);
 
     cursor: pointer;
 }
 
-#speed-slider::-moz-range-progress {
-    height: 4px;
-
-    border-radius: var(--avenmark-radius-pill);
-
-    background: var(--avenmark-accent);
-}
-
 
 /* ==========================================================
-   CONTROL STATUS
+   SOUND SWITCH
 ========================================================== */
 
-.control-status {
-    min-width: 48px;
+.sound-block {
 
-    color:
-        rgba(47, 47, 47, 0.48);
-
-    font-family: var(--avenmark-font);
-
-    font-size: 10px;
-    font-weight: 600;
-
-    white-space: nowrap;
-}
-
-
-/* ==========================================================
-   SOUND TOGGLE
-========================================================== */
-
-.sound-control {
-    gap: 10px;
-}
-
-.toggle {
-    display: inline-flex;
+    display: flex;
 
     align-items: center;
 
-    cursor: pointer;
+    justify-content: space-between;
 
-    user-select: none;
+    gap: 15px;
 }
 
-.toggle input {
+
+.sound-block .panel-label {
+
+    margin-bottom: 0;
+}
+
+
+.switch {
+
+    position: relative;
+
+    display: inline-flex;
+
+    width: 43px;
+    height: 25px;
+
+    flex-shrink: 0;
+}
+
+
+.switch input {
+
     position: absolute;
 
     opacity: 0;
 
-    width: 1px;
-    height: 1px;
-
     pointer-events: none;
 }
 
-.toggle-track {
-    position: relative;
 
-    display: block;
+.switch-track {
 
-    width: 42px;
-    height: 23px;
+    position: absolute;
 
-    border-radius: var(--avenmark-radius-pill);
+    inset: 0;
+
+    border-radius:
+        var(--avenmark-radius-pill);
 
     background:
         rgba(47, 47, 47, 0.18);
 
+    cursor: pointer;
+
     transition:
-        background 0.2s ease;
+        background .2s ease;
 }
 
-.toggle-thumb {
+
+.switch-thumb {
+
     position: absolute;
 
     top: 3px;
     left: 3px;
 
-    width: 17px;
-    height: 17px;
+    width: 19px;
+    height: 19px;
 
     border-radius: 50%;
 
-    background: var(--avenmark-bg);
+    background:
+        var(--avenmark-bg);
 
     box-shadow:
-        0 2px 5px rgba(47, 47, 47, 0.16);
+        0 2px 5px
+        rgba(47, 47, 47, 0.18);
 
     transition:
-        transform 0.2s ease;
-}
-
-.toggle input:checked + .toggle-track {
-    background: var(--avenmark-accent);
-}
-
-.toggle input:checked + .toggle-track .toggle-thumb {
-    transform: translateX(19px);
+        transform .2s ease;
 }
 
 
-/* ==========================================================
-   DESKTOP GAME PROPORTIONS
-========================================================== */
+.switch input:checked + .switch-track {
 
-@media (min-width: 1200px) {
+    background:
+        var(--avenmark-copper);
+}
 
-    .game-panel {
-        gap: 58px;
-    }
 
-    #speed-slider {
-        width: 130px;
-    }
+.switch input:checked + .switch-track .switch-thumb {
 
+    transform:
+        translateX(18px);
 }
 
 
 /* ==========================================================
-   TABLET
+   FOCUS
 ========================================================== */
 
-@media (max-width: 900px) {
+button:focus-visible,
+input:focus-visible {
+
+    outline:
+        2px solid
+        var(--avenmark-copper);
+
+    outline-offset: 3px;
+}
+
+
+/* ==========================================================
+   RESPONSIVE
+========================================================== */
+
+@media (max-width: 850px) {
 
     .app-header {
-        height: 72px;
+
+        min-height: 74px;
 
         padding:
-            0 22px;
+            14px 18px;
     }
 
-    .avi-runner {
-        grid-template-rows:
-            72px minmax(0, 1fr) auto;
+
+    .brand-logo {
+
+        width: 42px;
+        height: 42px;
     }
 
-    .logo {
-        width: 44px;
-        height: 44px;
+
+    .brand-title h1 {
+
+        font-size: 17px;
     }
 
-    .brand h1 {
-        font-size: 19px;
-    }
 
-    .header-button {
-        padding:
-            9px 16px;
-    }
-
-    .game-panel {
-        gap: 24px;
+    .game-section {
 
         padding:
-            13px 20px;
+            16px 18px 14px;
     }
 
-}
 
+    .game-card,
+    #game-canvas {
 
-/* ==========================================================
-   SMALL TABLET / LARGE PHONE
-========================================================== */
-
-@media (max-width: 700px) {
-
-    body {
-        overflow: hidden;
+        min-height: 390px;
     }
 
-    .game-panel {
-        min-height: 82px;
 
-        display: grid;
+    .control-panel {
+
+        width:
+            calc(100% - 36px);
 
         grid-template-columns:
-            auto auto 1fr auto;
+            1fr 1fr;
 
-        justify-content: stretch;
+        gap: 18px;
 
-        gap: 14px;
-
-        padding:
-            11px 16px;
+        margin-bottom: 18px;
     }
 
-    .panel-stat {
-        gap: 7px;
+
+    .speed-block {
+
+        grid-column:
+            span 2;
     }
 
-    .panel-control {
-        gap: 7px;
-    }
 
-    .panel-label {
-        font-size: 9px;
-        letter-spacing: 0.7px;
-    }
+    .sound-block {
 
-    .panel-value {
-        font-size: 15px;
-        min-width: 28px;
-    }
-
-    #speed-slider {
-        width: 82px;
-    }
-
-    .control-status {
-        display: none;
-    }
-
-    .game-over-score {
-        gap: 28px;
+        justify-content: flex-start;
     }
 
 }
 
 
-/* ==========================================================
-   PHONE
-========================================================== */
-
-@media (max-width: 540px) {
+@media (max-width: 560px) {
 
     .app-header {
-        height: 64px;
+
+        gap: 12px;
+    }
+
+
+    .header-controls {
+
+        gap: 6px;
+    }
+
+
+    .header-button {
 
         padding:
-            0 14px;
+            8px 12px;
+
+        font-size: 11px;
     }
 
-    .avi-runner {
-        grid-template-rows:
-            64px minmax(0, 1fr) auto;
+
+    .brand {
+
+        gap: 10px;
     }
 
-    .logo {
+
+    .brand-logo {
+
         width: 38px;
         height: 38px;
     }
 
-    .brand {
-        gap: 10px;
+
+    .brand-title h1 {
+
+        font-size: 15px;
+
+        letter-spacing:
+            -0.4px;
     }
 
-    .brand h1 {
+
+    .game-section {
+
+        padding:
+            12px;
+    }
+
+
+    .game-card,
+    #game-canvas {
+
+        min-height: 350px;
+
+        border-radius:
+            16px;
+    }
+
+
+    .control-panel {
+
+        width:
+            calc(100% - 24px);
+
+        padding:
+            15px;
+
+        border-radius:
+            16px;
+
+        gap: 15px;
+    }
+
+
+    .panel-value {
+
         font-size: 17px;
     }
 
-    .header-controls {
-        gap: 6px;
-    }
 
-    .header-button {
-        padding:
-            8px 12px;
-
-        font-size: 11px;
-    }
-
-    .game-screen {
-        padding: 18px;
-    }
-
-    .screen-card {
-        padding:
-            30px 23px;
-    }
-
-    .screen-card h2 {
-        font-size: 25px;
-    }
-
-    .screen-card p {
-        font-size: 13px;
-    }
-
-    .game-panel {
-        grid-template-columns:
-            1fr 1fr;
-
-        grid-template-rows:
-            auto auto;
-
-        min-height: 108px;
-
-        gap:
-            8px 12px;
+    .screen-content {
 
         padding:
-            10px 14px;
-    }
-
-    .panel-stat {
-        justify-content: center;
-    }
-
-    .panel-control {
-        justify-content: center;
-    }
-
-    .panel-control:nth-of-type(3) {
-        grid-column: 1 / 2;
-    }
-
-    .sound-control {
-        grid-column: 2 / 3;
-    }
-
-    .slider-row {
-        gap: 4px;
-    }
-
-    #speed-slider {
-        width: 76px;
-    }
-
-    .milestone-message {
-        font-size: 11px;
+            25px 20px;
     }
 
 }
 
 
-/* ==========================================================
-   VERY SMALL PHONES
-========================================================== */
+@media (max-height: 650px) and (min-width: 700px) {
 
-@media (max-width: 380px) {
+    .app-header {
 
-    .brand h1 {
-        font-size: 15px;
+        min-height: 68px;
     }
 
-    .header-button {
-        padding:
-            7px 9px;
+
+    .brand-logo {
+
+        width: 38px;
+        height: 38px;
     }
 
-    .game-panel {
-        padding:
-            9px 10px;
+
+    .game-section {
+
+        padding-top: 12px;
+        padding-bottom: 10px;
     }
 
-    .panel-label {
-        font-size: 8px;
-    }
 
-    .panel-value {
-        font-size: 14px;
-    }
+    .control-panel {
 
-    #speed-slider {
-        width: 62px;
-    }
+        margin-bottom: 12px;
 
-}
-
-
-/* ==========================================================
-   TOUCH DEVICES
-========================================================== */
-
-@media (hover: none) {
-
-    .header-button:hover,
-    .primary-button:hover,
-    .brand:hover .logo {
-        transform: none;
-    }
-
-}
-
-
-/* ==========================================================
-   REDUCED MOTION
-========================================================== */
-
-@media (prefers-reduced-motion: reduce) {
-
-    *,
-    *::before,
-    *::after {
-        scroll-behavior: auto !important;
-        animation-duration: 0.01ms !important;
-        animation-iteration-count: 1 !important;
-        transition-duration: 0.01ms !important;
+        padding-top: 12px;
+        padding-bottom: 12px;
     }
 
 }
