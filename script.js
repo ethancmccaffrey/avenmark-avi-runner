@@ -4,710 +4,558 @@
 ========================================================== */
 
 (() => {
+
     "use strict";
 
-    /* ==========================================================
-       ELEMENTS
-    ========================================================== */
 
-    const canvas = document.getElementById("game-canvas");
-    const ctx = canvas ? canvas.getContext("2d") : null;
+    /* ========================================================
+       DOM
+    ======================================================== */
 
-    const startScreen = document.getElementById("start-screen");
-    const gameOverScreen = document.getElementById("game-over-screen");
+    const canvas =
+        document.getElementById("game-canvas");
 
-    const startButton = document.getElementById("start-button");
-    const restartButton = document.getElementById("restart-button");
+    const ctx =
+        canvas.getContext("2d");
 
-    const pauseButton = document.getElementById("pause-button");
-    const resetButton = document.getElementById("reset-button");
 
-    const scoreElement = document.getElementById("score");
-    const highScoreElement = document.getElementById("high-score");
+    const startScreen =
+        document.getElementById("start-screen");
 
-    const gameOverScoreElement = document.getElementById("game-over-score");
-    const gameOverHighScoreElement =
-        document.getElementById("game-over-high-score");
+    const pauseScreen =
+        document.getElementById("pause-screen");
 
-    const speedSlider = document.getElementById("speed-slider");
-    const speedValue = document.getElementById("speed-value");
+    const gameOverScreen =
+        document.getElementById("game-over-screen");
 
-    const soundToggle = document.getElementById("sound-toggle");
 
-    if (!canvas || !ctx) {
-        console.error("Avenmark Avi Runner: game canvas was not found.");
-        return;
-    }
+    const startButton =
+        document.getElementById("start-button");
 
-    /* ==========================================================
-       CANVAS
-    ========================================================== */
+    const pauseButton =
+        document.getElementById("pause-button");
 
-    let width = 0;
-    let height = 0;
-    let groundY = 0;
-    let dpr = 1;
+    const resetButton =
+        document.getElementById("reset-button");
 
-    function resizeCanvas() {
-        const rect = canvas.getBoundingClientRect();
+    const resumeButton =
+        document.getElementById("resume-button");
 
-        width = Math.max(320, rect.width);
-        height = Math.max(220, rect.height);
+    const restartButton =
+        document.getElementById("restart-button");
 
-        dpr = Math.min(window.devicePixelRatio || 1, 2);
 
-        canvas.width = Math.floor(width * dpr);
-        canvas.height = Math.floor(height * dpr);
+    const scoreDisplay =
+        document.getElementById("score-display");
 
-        ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+    const highScoreDisplay =
+        document.getElementById("high-score-display");
 
-        groundY = height * 0.79;
+    const finalScoreDisplay =
+        document.getElementById("final-score");
 
-        if (!game.running) {
-            draw();
-        }
-    }
 
-    window.addEventListener("resize", resizeCanvas);
+    const speedSlider =
+        document.getElementById("speed-slider");
 
-    /* ==========================================================
-       AVENMARK COLORS
-    ========================================================== */
+    const speedValue =
+        document.getElementById("speed-value");
+
+    const soundToggle =
+        document.getElementById("sound-toggle");
+
+
+    /* ========================================================
+       CONSTANTS
+    ======================================================== */
 
     const COLORS = {
-        background: "#F5F5F2",
+
+        bg: "#F5F5F2",
+
         dark: "#2F2F2F",
+
         blue: "#103159",
+
         copper: "#C47A45",
-        white: "#F5F5F2",
-        muted: "#8B8B86",
-        soft: "#DCDCD5"
+
+        muted:
+            "rgba(47, 47, 47, 0.28)"
     };
 
-    /* ==========================================================
+
+    const SPEEDS = {
+
+        0: 0.86,
+        1: 1.00,
+        2: 1.12,
+        3: 1.26,
+        4: 1.42
+    };
+
+
+    /* ========================================================
        GAME STATE
-    ========================================================== */
+    ======================================================== */
 
-    const game = {
-        running: false,
-        paused: false,
-        gameOver: false,
+    let state = "ready";
 
-        score: 0,
-        highScore: Number(localStorage.getItem("avenmarkAviHighScore")) || 0,
+    let animationFrame = null;
 
-        distance: 0,
+    let lastTime = 0;
 
-        baseSpeed: 6,
-        speedMultiplier: 1,
+    let elapsed = 0;
 
-        lastTime: 0,
-        animationFrame: null,
+    let distance = 0;
 
-        nextObstacle: 900,
+    let score = 0;
 
-        nextMessage: 500,
+    let highScore =
+        Number(
+            localStorage.getItem(
+                "avenmark-avi-high-score"
+            )
+        ) || 0;
 
-        message: "",
-        messageTimer: 0,
 
-        stars: [],
-        debris: []
-    };
+    let speedLevel = 1;
 
-    /* ==========================================================
-       AVI
-    ========================================================== */
+    let gameSpeed =
+        SPEEDS[speedLevel];
+
+
+    let groundOffset = 0;
+
+    let obstacleTimer = 0;
+
+    let nextObstacle =
+        randomBetween(1050, 1650);
+
+
+    let debrisTimer = 0;
+
+    let nextDebris =
+        randomBetween(500, 1100);
+
+
+    let messageTimer = 0;
+
+    let currentMessage = "";
+
+    let messageAlpha = 0;
+
+
+    /* ========================================================
+       PLAYER
+    ======================================================== */
 
     const avi = {
-        x: 110,
+
+        x: 100,
+
         y: 0,
 
-        width: 48,
+        width: 54,
+
         height: 70,
 
         velocityY: 0,
 
-        gravity: 0.72,
-        jumpStrength: -14.2,
+        gravity: 0.00245,
+
+        jumpForce: -0.84,
 
         grounded: true,
 
-        runFrame: 0,
-        runTimer: 0,
-
-        reset() {
-            this.x = Math.max(55, width * 0.12);
-            this.y = groundY - this.height;
-
-            this.velocityY = 0;
-            this.grounded = true;
-
-            this.runFrame = 0;
-            this.runTimer = 0;
-        },
-
-        jump() {
-            if (!game.running || game.paused || game.gameOver) {
-                return;
-            }
-
-            if (!this.grounded) {
-                return;
-            }
-
-            this.velocityY = this.jumpStrength;
-            this.grounded = false;
-
-            playSound("jump");
-        },
-
-        update(dt) {
-            if (!game.running || game.paused || game.gameOver) {
-                return;
-            }
-
-            this.velocityY += this.gravity * dt;
-            this.y += this.velocityY * dt;
-
-            const floor = groundY - this.height;
-
-            if (this.y >= floor) {
-                this.y = floor;
-                this.velocityY = 0;
-
-                if (!this.grounded) {
-                    playSound("land");
-                }
-
-                this.grounded = true;
-            }
-
-            if (this.grounded) {
-                this.runTimer += dt;
-
-                if (this.runTimer > 7) {
-                    this.runTimer = 0;
-                    this.runFrame = this.runFrame ? 0 : 1;
-                }
-            }
-        }
+        bob: 0
     };
 
-    /* ==========================================================
-       OBSTACLES
-    ========================================================== */
 
-    const obstacles = [];
+    /* ========================================================
+       WORLD
+    ======================================================== */
 
-    function createCraters() {
-        const crater = {
-            type: "crater",
+    let groundY = 0;
 
-            x: width + 100,
+    let obstacles = [];
 
-            width: 58 + Math.random() * 38,
-            height: 16 + Math.random() * 7,
+    let debris = [];
 
-            passed: false
-        };
+    let stars = [];
 
-        crater.y = groundY - crater.height + 2;
 
-        obstacles.push(crater);
-    }
+    /* ========================================================
+       AUDIO
+    ======================================================== */
 
-    function createUFO() {
-        const ufo = {
-            type: "ufo",
+    let audioContext = null;
 
-            x: width + 100,
+    let masterGain = null;
 
-            width: 62,
-            height: 30,
+    let soundEnabled = true;
 
-            y:
-                groundY -
-                85 -
-                Math.random() * 70,
 
-            passed: false,
+    function initAudio() {
 
-            bob: Math.random() * Math.PI * 2
-        };
-
-        obstacles.push(ufo);
-    }
-
-    function spawnObstacle() {
-        const canFly = game.score > 180;
-
-        if (canFly && Math.random() < 0.27) {
-            createUFO();
-        } else {
-            createCraters();
-        }
-
-        const speedFactor = Math.min(game.score / 1200, 1);
-
-        game.nextObstacle =
-            720 +
-            Math.random() * 580 -
-            speedFactor * 170;
-    }
-
-    function updateObstacles(dt) {
-        if (!game.running || game.paused || game.gameOver) {
+        if (audioContext) {
             return;
         }
 
-        const speed = game.baseSpeed * game.speedMultiplier;
+        const AudioContext =
+            window.AudioContext ||
+            window.webkitAudioContext;
 
-        game.nextObstacle -= speed * dt;
-
-        if (game.nextObstacle <= 0) {
-            spawnObstacle();
+        if (!AudioContext) {
+            return;
         }
 
-        for (let i = obstacles.length - 1; i >= 0; i--) {
-            const obstacle = obstacles[i];
+        audioContext =
+            new AudioContext();
 
-            obstacle.x -= speed * dt;
+        masterGain =
+            audioContext.createGain();
 
-            if (obstacle.type === "ufo") {
-                obstacle.bob += 0.035 * dt;
-                obstacle.y += Math.sin(obstacle.bob) * 0.18;
-            }
+        masterGain.gain.value =
+            soundEnabled ? 0.055 : 0;
 
-            if (
-                !obstacle.passed &&
-                obstacle.x + obstacle.width < avi.x
-            ) {
-                obstacle.passed = true;
-            }
-
-            if (obstacle.x + obstacle.width < -100) {
-                obstacles.splice(i, 1);
-            }
-        }
-    }
-
-    /* ==========================================================
-       COLLISION
-    ========================================================== */
-
-    function getAviHitbox() {
-        return {
-            x: avi.x + 9,
-            y: avi.y + 7,
-            width: avi.width - 18,
-            height: avi.height - 10
-        };
-    }
-
-    function getObstacleHitbox(obstacle) {
-        if (obstacle.type === "crater") {
-            return {
-                x: obstacle.x + 6,
-                y: obstacle.y + 3,
-                width: obstacle.width - 12,
-                height: obstacle.height - 2
-            };
-        }
-
-        return {
-            x: obstacle.x + 8,
-            y: obstacle.y + 5,
-            width: obstacle.width - 16,
-            height: obstacle.height - 8
-        };
-    }
-
-    function intersects(a, b) {
-        return (
-            a.x < b.x + b.width &&
-            a.x + a.width > b.x &&
-            a.y < b.y + b.height &&
-            a.y + a.height > b.y
+        masterGain.connect(
+            audioContext.destination
         );
     }
 
-    function checkCollisions() {
-        if (!game.running || game.gameOver) {
-            return;
-        }
 
-        const aviBox = getAviHitbox();
+    async function resumeAudio() {
 
-        for (const obstacle of obstacles) {
-            if (intersects(aviBox, getObstacleHitbox(obstacle))) {
-                endGame();
-                return;
+        initAudio();
+
+        if (
+            audioContext &&
+            audioContext.state === "suspended"
+        ) {
+
+            try {
+                await audioContext.resume();
+            } catch {
+                // Browser declined audio resume.
             }
         }
     }
 
-    /* ==========================================================
-       SCORE
-    ========================================================== */
 
-    function updateScore(dt) {
-        if (!game.running || game.paused || game.gameOver) {
+    function playTone(
+        frequency,
+        duration,
+        type = "sine",
+        volume = 0.05
+    ) {
+
+        if (
+            !soundEnabled ||
+            !audioContext ||
+            !masterGain
+        ) {
             return;
         }
 
-        game.distance += game.baseSpeed * game.speedMultiplier * dt;
+        const oscillator =
+            audioContext.createOscillator();
 
-        game.score = Math.floor(game.distance / 10);
+        const gain =
+            audioContext.createGain();
 
-        if (game.score > game.highScore) {
-            game.highScore = game.score;
-
-            localStorage.setItem(
-                "avenmarkAviHighScore",
-                String(game.highScore)
-            );
-        }
-
-        if (game.score >= game.nextMessage) {
-            showAvenmarkMessage(game.nextMessage);
-            game.nextMessage += 500;
-        }
-
-        updateScoreUI();
-    }
-
-    function updateScoreUI() {
-        if (scoreElement) {
-            scoreElement.textContent = String(game.score).padStart(5, "0");
-        }
-
-        if (highScoreElement) {
-            highScoreElement.textContent =
-                String(game.highScore).padStart(5, "0");
-        }
-    }
-
-    function showAvenmarkMessage(points) {
-        game.message = `Continue plz :)`;
-        game.messageTimer = 150;
-
-        playSound("message");
-
-        /*
-         * The score milestone itself is enough context.
-         * The message floats quietly in the sky instead of
-         * becoming a giant game announcement.
-         */
-        void points;
-    }
-
-    /* ==========================================================
-       SPEED
-    ========================================================== */
-
-    function readSpeed() {
-        if (!speedSlider) {
-            return;
-        }
-
-        let value = Number(speedSlider.value);
-
-        if (!Number.isFinite(value)) {
-            value = 1;
-        }
-
-        /*
-         * 0 = slightly slower
-         * 1 = normal
-         * 2+ = increasingly faster
-         */
-
-        if (value === 0) {
-            game.speedMultiplier = 0.82;
-        } else {
-            game.speedMultiplier = value;
-        }
-
-        if (speedValue) {
-            speedValue.textContent = String(value);
-        }
-    }
-
-    if (speedSlider) {
-        speedSlider.min = "0";
-        speedSlider.max = "4";
-
-        /*
-         * Normal speed is the default.
-         */
-        speedSlider.value = "1";
-
-        speedSlider.addEventListener("input", readSpeed);
-    }
-
-    readSpeed();
-
-    /* ==========================================================
-       SOUND
-    ========================================================== */
-
-    let audioContext = null;
-    let soundEnabled = true;
-
-    if (soundToggle) {
-        soundEnabled =
-            soundToggle.checked !== false;
-
-        /*
-         * Explicitly start ON.
-         */
-        soundToggle.checked = true;
-
-        soundToggle.addEventListener("change", () => {
-            soundEnabled = soundToggle.checked;
-
-            if (soundEnabled) {
-                playSound("toggle");
-            }
-        });
-    }
-
-    function getAudioContext() {
-        if (!audioContext) {
-            const AudioContext =
-                window.AudioContext ||
-                window.webkitAudioContext;
-
-            if (!AudioContext) {
-                return null;
-            }
-
-            audioContext = new AudioContext();
-        }
-
-        if (audioContext.state === "suspended") {
-            audioContext.resume();
-        }
-
-        return audioContext;
-    }
-
-    /*
-     * Original lightweight Avenmark sounds.
-     * No external audio file is required.
-     */
-
-    function playSound(type) {
-        if (!soundEnabled) {
-            return;
-        }
-
-        const audio = getAudioContext();
-
-        if (!audio) {
-            return;
-        }
-
-        const oscillator = audio.createOscillator();
-        const gain = audio.createGain();
-
-        oscillator.connect(gain);
-        gain.connect(audio.destination);
-
-        const now = audio.currentTime;
-
-        let frequency = 440;
-        let duration = 0.08;
-        let wave = "sine";
-
-        if (type === "jump") {
-            frequency = 520;
-            duration = 0.10;
-            wave = "triangle";
-        }
-
-        if (type === "land") {
-            frequency = 180;
-            duration = 0.045;
-            wave = "sine";
-        }
-
-        if (type === "message") {
-            frequency = 660;
-            duration = 0.16;
-            wave = "sine";
-        }
-
-        if (type === "toggle") {
-            frequency = 740;
-            duration = 0.06;
-            wave = "sine";
-        }
-
-        if (type === "gameover") {
-            frequency = 130;
-            duration = 0.24;
-            wave = "triangle";
-        }
-
-        oscillator.type = wave;
+        oscillator.type = type;
 
         oscillator.frequency.setValueAtTime(
             frequency,
-            now
+            audioContext.currentTime
         );
 
-        if (type === "gameover") {
-            oscillator.frequency.exponentialRampToValueAtTime(
-                75,
-                now + duration
-            );
-        }
+        gain.gain.setValueAtTime(
+            0,
+            audioContext.currentTime
+        );
 
-        gain.gain.setValueAtTime(0.0001, now);
-
-        gain.gain.exponentialRampToValueAtTime(
-            0.045,
-            now + 0.008
+        gain.gain.linearRampToValueAtTime(
+            volume,
+            audioContext.currentTime + 0.012
         );
 
         gain.gain.exponentialRampToValueAtTime(
             0.0001,
-            now + duration
+            audioContext.currentTime + duration
         );
 
-        oscillator.start(now);
-        oscillator.stop(now + duration + 0.02);
+        oscillator.connect(gain);
+
+        gain.connect(masterGain);
+
+        oscillator.start();
+
+        oscillator.stop(
+            audioContext.currentTime + duration + 0.02
+        );
     }
 
-    /* ==========================================================
+
+    function playJumpSound() {
+
+        playTone(
+            520,
+            0.12,
+            "triangle",
+            0.07
+        );
+
+        window.setTimeout(() => {
+
+            playTone(
+                720,
+                0.10,
+                "triangle",
+                0.04
+            );
+
+        }, 35);
+    }
+
+
+    function playCrashSound() {
+
+        playTone(
+            115,
+            0.18,
+            "sawtooth",
+            0.06
+        );
+
+        window.setTimeout(() => {
+
+            playTone(
+                75,
+                0.22,
+                "sine",
+                0.04
+            );
+
+        }, 60);
+    }
+
+
+    function playMilestoneSound() {
+
+        playTone(
+            660,
+            0.10,
+            "triangle",
+            0.045
+        );
+
+        window.setTimeout(() => {
+
+            playTone(
+                880,
+                0.14,
+                "triangle",
+                0.045
+            );
+
+        }, 80);
+    }
+
+
+    /* ========================================================
+       RESIZE
+    ======================================================== */
+
+    function resizeCanvas() {
+
+        const rect =
+            canvas.getBoundingClientRect();
+
+        const dpr =
+            Math.min(
+                window.devicePixelRatio || 1,
+                2
+            );
+
+        canvas.width =
+            Math.max(
+                1,
+                Math.floor(rect.width * dpr)
+            );
+
+        canvas.height =
+            Math.max(
+                1,
+                Math.floor(rect.height * dpr)
+            );
+
+        ctx.setTransform(
+            dpr,
+            0,
+            0,
+            dpr,
+            0,
+            0
+        );
+
+        groundY =
+            rect.height * 0.76;
+
+        avi.x =
+            Math.max(
+                55,
+                rect.width * 0.115
+            );
+
+        if (avi.grounded) {
+
+            avi.y =
+                groundY - avi.height;
+        }
+
+        createStars();
+
+        draw();
+    }
+
+
+    window.addEventListener(
+        "resize",
+        resizeCanvas
+    );
+
+
+    /* ========================================================
        STARS
-    ========================================================== */
+    ======================================================== */
 
     function createStars() {
-        game.stars = [];
 
-        const count = Math.max(
-            22,
-            Math.floor(width / 28)
-        );
+        const width =
+            canvas.clientWidth;
 
-        for (let i = 0; i < count; i++) {
-            game.stars.push({
-                x: Math.random() * width,
-                y: Math.random() * groundY * 0.72,
+        const height =
+            canvas.clientHeight;
 
-                size:
-                    Math.random() > 0.85
-                        ? 2
-                        : 1,
+        stars = [];
 
-                speed:
-                    0.08 +
-                    Math.random() * 0.24
-            });
-        }
-    }
-
-    function updateStars(dt) {
-        if (!game.running || game.paused) {
-            return;
-        }
-
-        const movement =
-            game.baseSpeed *
-            game.speedMultiplier;
-
-        for (const star of game.stars) {
-            star.x -= movement * star.speed * dt;
-
-            if (star.x < -5) {
-                star.x = width + 5;
-                star.y = Math.random() * groundY * 0.72;
-            }
-        }
-    }
-
-    /* ==========================================================
-       SPACE DEBRIS
-    ========================================================== */
-
-    function createDebris() {
-        game.debris = [];
-
-        /*
-         * Deliberately sparse.
-         * The sky should feel quiet rather than crowded.
-         */
-
-        const count = Math.max(
-            4,
-            Math.floor(width / 210)
-        );
+        const count =
+            Math.max(
+                30,
+                Math.floor(width / 24)
+            );
 
         for (let i = 0; i < count; i++) {
-            game.debris.push({
-                x: Math.random() * width,
+
+            stars.push({
+
+                x:
+                    Math.random() * width,
+
                 y:
-                    60 +
                     Math.random() *
-                        (groundY * 0.48),
+                    Math.max(
+                        50,
+                        height * 0.57
+                    ),
 
                 size:
-                    2 +
-                    Math.random() * 2,
+                    randomBetween(
+                        0.7,
+                        1.8
+                    ),
 
-                speed:
-                    0.04 +
-                    Math.random() * 0.08
+                alpha:
+                    randomBetween(
+                        0.20,
+                        0.62
+                    ),
+
+                drift:
+                    randomBetween(
+                        0.04,
+                        0.14
+                    )
             });
         }
     }
 
-    function updateDebris(dt) {
-        if (!game.running || game.paused) {
-            return;
-        }
 
-        const movement =
-            game.baseSpeed *
-            game.speedMultiplier;
+    /* ========================================================
+       DRAWING HELPERS
+    ======================================================== */
 
-        for (const piece of game.debris) {
-            piece.x -= movement * piece.speed * dt;
+    function roundedRect(
+        x,
+        y,
+        width,
+        height,
+        radius
+    ) {
 
-            if (piece.x < -10) {
-                piece.x =
-                    width +
-                    60 +
-                    Math.random() * 150;
+        const r =
+            Math.min(
+                radius,
+                width / 2,
+                height / 2
+            );
 
-                piece.y =
-                    60 +
-                    Math.random() *
-                        (groundY * 0.48);
-            }
-        }
+        ctx.beginPath();
+
+        ctx.moveTo(
+            x + r,
+            y
+        );
+
+        ctx.arcTo(
+            x + width,
+            y,
+            x + width,
+            y + height,
+            r
+        );
+
+        ctx.arcTo(
+            x + width,
+            y + height,
+            x,
+            y + height,
+            r
+        );
+
+        ctx.arcTo(
+            x,
+            y + height,
+            x,
+            y,
+            r
+        );
+
+        ctx.arcTo(
+            x,
+            y,
+            x + width,
+            y,
+            r
+        );
+
+        ctx.closePath();
     }
 
-    /* ==========================================================
-       DRAW — BACKGROUND
-    ========================================================== */
 
-    function drawBackground() {
-        ctx.fillStyle = COLORS.background;
-        ctx.fillRect(0, 0, width, height);
+    function drawStars() {
 
-        /*
-         * The only strong color in the sky is the Avenmark blue.
-         * Stars remain copper.
-         */
+        for (const star of stars) {
 
-        for (const star of game.stars) {
-            ctx.fillStyle = COLORS.copper;
+            ctx.globalAlpha =
+                star.alpha;
+
+            ctx.fillStyle =
+                COLORS.copper;
 
             ctx.beginPath();
+
             ctx.arc(
                 star.x,
                 star.y,
@@ -715,374 +563,128 @@
                 0,
                 Math.PI * 2
             );
+
             ctx.fill();
         }
 
-        for (const piece of game.debris) {
-            ctx.fillStyle = COLORS.blue;
-
-            ctx.beginPath();
-            ctx.arc(
-                piece.x,
-                piece.y,
-                piece.size,
-                0,
-                Math.PI * 2
-            );
-            ctx.fill();
-        }
+        ctx.globalAlpha = 1;
     }
 
-    /* ==========================================================
-       DRAW — GROUND
-    ========================================================== */
 
-    function drawGround() {
-        ctx.strokeStyle = COLORS.dark;
-        ctx.lineWidth = 2;
-
-        ctx.beginPath();
-        ctx.moveTo(0, groundY);
-        ctx.lineTo(width, groundY);
-        ctx.stroke();
-
-        /*
-         * Small, restrained terrain marks.
-         * No giant detailed landscape.
-         */
-
-        const offset =
-            (game.distance * 0.75) % 90;
-
-        for (let x = -90 + offset; x < width + 90; x += 90) {
-            ctx.strokeStyle =
-                "rgba(47,47,47,0.16)";
-
-            ctx.lineWidth = 1;
-
-            ctx.beginPath();
-            ctx.moveTo(x, groundY + 5);
-            ctx.lineTo(x + 18, groundY + 5);
-            ctx.stroke();
-        }
-    }
-
-    /* ==========================================================
-       DRAW — AVI
-    ========================================================== */
-
-    function drawAvi() {
-        const x = avi.x;
-        const y = avi.y;
-
-        ctx.save();
-
-        /*
-         * Backpack
-         */
-        ctx.fillStyle = COLORS.blue;
-
-        roundRect(
-            ctx,
-            x - 5,
-            y + 22,
-            13,
-            31,
-            5
-        );
-
-        ctx.fill();
-
-        /*
-         * Helmet outer shell
-         */
-        ctx.fillStyle = COLORS.dark;
-
-        ctx.beginPath();
-        ctx.arc(
-            x + 24,
-            y + 17,
-            17,
-            0,
-            Math.PI * 2
-        );
-        ctx.fill();
-
-        /*
-         * Helmet glass
-         */
-        ctx.fillStyle = COLORS.blue;
-
-        ctx.beginPath();
-        ctx.arc(
-            x + 24,
-            y + 17,
-            11,
-            0,
-            Math.PI * 2
-        );
-        ctx.fill();
-
-        /*
-         * Body
-         */
-        ctx.fillStyle = COLORS.white;
-
-        roundRect(
-            ctx,
-            x + 10,
-            y + 30,
-            29,
-            27,
-            9
-        );
-
-        ctx.fill();
-
-        /*
-         * Avenmark copper chest detail
-         */
-        ctx.fillStyle = COLORS.copper;
-
-        roundRect(
-            ctx,
-            x + 18,
-            y + 37,
-            12,
-            4,
-            2
-        );
-
-        ctx.fill();
-
-        /*
-         * Laptop — intentionally visible in Avi's hands.
-         */
-        drawLaptop(
-            x + 28,
-            y + 47
-        );
-
-        /*
-         * Legs
-         */
-        ctx.strokeStyle = COLORS.dark;
-        ctx.lineWidth = 6;
-        ctx.lineCap = "round";
-
-        const running =
-            avi.grounded &&
-            game.running &&
-            !game.paused;
-
-        const legOffset =
-            running
-                ? avi.runFrame
-                    ? 5
-                    : -5
-                : 0;
-
-        ctx.beginPath();
-        ctx.moveTo(x + 19, y + 55);
-        ctx.lineTo(
-            x + 16 - legOffset,
-            y + 68
-        );
-        ctx.stroke();
-
-        ctx.beginPath();
-        ctx.moveTo(x + 32, y + 55);
-        ctx.lineTo(
-            x + 35 + legOffset,
-            y + 68
-        );
-        ctx.stroke();
-
-        /*
-         * Boots
-         */
-        ctx.lineWidth = 5;
-
-        ctx.beginPath();
-        ctx.moveTo(
-            x + 13 - legOffset,
-            y + 68
-        );
-        ctx.lineTo(
-            x + 21 - legOffset,
-            y + 68
-        );
-        ctx.stroke();
-
-        ctx.beginPath();
-        ctx.moveTo(
-            x + 32 + legOffset,
-            y + 68
-        );
-        ctx.lineTo(
-            x + 40 + legOffset,
-            y + 68
-        );
-        ctx.stroke();
-
-        ctx.restore();
-    }
-
-    function drawLaptop(x, y) {
-        ctx.save();
-
-        /*
-         * Screen
-         */
-        ctx.fillStyle = COLORS.dark;
-
-        roundRect(
-            ctx,
-            x - 5,
-            y - 11,
-            18,
-            12,
-            2
-        );
-
-        ctx.fill();
-
-        ctx.fillStyle = COLORS.copper;
-
-        ctx.fillRect(
-            x - 2,
-            y - 8,
-            12,
-            6
-        );
-
-        /*
-         * Base
-         */
-        ctx.fillStyle = COLORS.dark;
-
-        ctx.beginPath();
-        ctx.moveTo(x - 7, y + 1);
-        ctx.lineTo(x + 15, y + 1);
-        ctx.lineTo(x + 18, y + 4);
-        ctx.lineTo(x - 10, y + 4);
-        ctx.closePath();
-        ctx.fill();
-
-        ctx.restore();
-    }
-
-    /* ==========================================================
-       DRAW — CRATER
-    ========================================================== */
-
-    function drawCrater(obstacle) {
-        ctx.save();
-
-        ctx.fillStyle = COLORS.dark;
-
-        ctx.beginPath();
-
-        ctx.ellipse(
-            obstacle.x + obstacle.width / 2,
-            groundY + 2,
-            obstacle.width / 2,
-            obstacle.height / 2,
-            0,
-            0,
-            Math.PI * 2
-        );
-
-        ctx.fill();
-
-        /*
-         * Small inner highlight keeps it readable
-         * without making it overly detailed.
-         */
-
-        ctx.strokeStyle =
-            "rgba(245,245,242,0.38)";
-
-        ctx.lineWidth = 2;
-
-        ctx.beginPath();
-
-        ctx.arc(
-            obstacle.x + obstacle.width * 0.58,
-            groundY + 1,
-            obstacle.width * 0.18,
-            Math.PI * 1.05,
-            Math.PI * 1.85
-        );
-
-        ctx.stroke();
-
-        ctx.restore();
-    }
-
-    /* ==========================================================
-       DRAW — UFO
-    ========================================================== */
+    /* ========================================================
+       UFO
+    ======================================================== */
 
     function drawUFO(obstacle) {
+
         const x = obstacle.x;
         const y = obstacle.y;
 
+        const width =
+            obstacle.width;
+
+        const height =
+            obstacle.height;
+
         ctx.save();
 
-        /*
-         * UFO silhouette.
-         * Minimal enough to belong beside Chrome-Dino-style
-         * obstacles, but clearly an Avenmark UFO.
-         */
+        ctx.translate(
+            x + width / 2,
+            y + height / 2
+        );
 
-        ctx.fillStyle = COLORS.blue;
+        const hover =
+            Math.sin(
+                elapsed * 0.005 +
+                obstacle.seed
+            ) * 2;
+
+        ctx.translate(
+            0,
+            hover
+        );
+
+
+        /* top dome */
+
+        ctx.fillStyle =
+            COLORS.bg;
+
+        ctx.strokeStyle =
+            COLORS.blue;
+
+        ctx.lineWidth = 2;
 
         ctx.beginPath();
 
         ctx.ellipse(
-            x + obstacle.width / 2,
-            y + 16,
-            obstacle.width / 2,
-            10,
             0,
+            -height * 0.10,
+            width * 0.23,
+            height * 0.25,
             0,
-            Math.PI * 2
-        );
-
-        ctx.fill();
-
-        /*
-         * Dome
-         */
-        ctx.fillStyle = COLORS.dark;
-
-        ctx.beginPath();
-
-        ctx.arc(
-            x + obstacle.width / 2,
-            y + 12,
-            10,
             Math.PI,
             0
         );
 
         ctx.fill();
 
-        /*
-         * Copper UFO lights
-         */
-        ctx.fillStyle = COLORS.copper;
+        ctx.stroke();
 
-        const lightY = y + 21;
 
-        for (let i = 0; i < 3; i++) {
+        /* body */
+
+        ctx.beginPath();
+
+        ctx.ellipse(
+            0,
+            0,
+            width * 0.49,
+            height * 0.19,
+            0,
+            0,
+            Math.PI * 2
+        );
+
+        ctx.fillStyle =
+            COLORS.blue;
+
+        ctx.fill();
+
+
+        /* copper center */
+
+        ctx.fillStyle =
+            COLORS.copper;
+
+        ctx.beginPath();
+
+        ctx.ellipse(
+            0,
+            2,
+            width * 0.18,
+            height * 0.075,
+            0,
+            0,
+            Math.PI * 2
+        );
+
+        ctx.fill();
+
+
+        /* tiny lights */
+
+        ctx.fillStyle =
+            COLORS.copper;
+
+        for (let i = -1; i <= 1; i++) {
+
             ctx.beginPath();
 
             ctx.arc(
-                x + 17 + i * 14,
-                lightY,
-                2,
+                i * width * 0.25,
+                height * 0.06,
+                1.5,
                 0,
                 Math.PI * 2
             );
@@ -1093,543 +695,1712 @@
         ctx.restore();
     }
 
-    /* ==========================================================
-       DRAW — OBSTACLES
-    ========================================================== */
 
-    function drawObstacles() {
-        for (const obstacle of obstacles) {
-            if (obstacle.type === "crater") {
-                drawCrater(obstacle);
-            } else {
-                drawUFO(obstacle);
-            }
+    /* ========================================================
+       CRATER
+    ======================================================== */
+
+    function drawCrater(obstacle) {
+
+        const x = obstacle.x;
+        const y = obstacle.y;
+
+        const width =
+            obstacle.width;
+
+        const height =
+            obstacle.height;
+
+
+        ctx.save();
+
+        /* subtle outer lip */
+
+        ctx.fillStyle =
+            "rgba(47,47,47,0.11)";
+
+        ctx.beginPath();
+
+        ctx.ellipse(
+            x + width / 2,
+            y + height * 0.68,
+            width / 2,
+            height * 0.34,
+            0,
+            0,
+            Math.PI * 2
+        );
+
+        ctx.fill();
+
+
+        /* crater interior */
+
+        ctx.fillStyle =
+            "rgba(47,47,47,0.17)";
+
+        ctx.beginPath();
+
+        ctx.ellipse(
+            x + width / 2,
+            y + height * 0.62,
+            width * 0.36,
+            height * 0.22,
+            0,
+            0,
+            Math.PI * 2
+        );
+
+        ctx.fill();
+
+
+        /* small lip highlight */
+
+        ctx.strokeStyle =
+            "rgba(196,122,69,0.24)";
+
+        ctx.lineWidth = 1.4;
+
+        ctx.beginPath();
+
+        ctx.arc(
+            x + width * 0.50,
+            y + height * 0.56,
+            width * 0.34,
+            Math.PI * 1.08,
+            Math.PI * 1.92
+        );
+
+        ctx.stroke();
+
+        ctx.restore();
+    }
+
+
+    /* ========================================================
+       DEBRIS
+    ======================================================== */
+
+    function drawDebrisPiece(piece) {
+
+        ctx.save();
+
+        ctx.translate(
+            piece.x,
+            piece.y
+        );
+
+        ctx.rotate(piece.rotation);
+
+        ctx.fillStyle =
+            "rgba(47,47,47,0.28)";
+
+        ctx.beginPath();
+
+        ctx.moveTo(
+            -piece.size,
+            piece.size * .3
+        );
+
+        ctx.lineTo(
+            -piece.size * .3,
+            -piece.size
+        );
+
+        ctx.lineTo(
+            piece.size,
+            -piece.size * .25
+        );
+
+        ctx.lineTo(
+            piece.size * .25,
+            piece.size
+        );
+
+        ctx.closePath();
+
+        ctx.fill();
+
+        ctx.restore();
+    }
+
+
+    /* ========================================================
+       AVI
+    ======================================================== */
+
+    function drawAvi() {
+
+        const x = avi.x;
+        const y =
+            avi.y +
+            Math.sin(avi.bob) * 1.2;
+
+        const w =
+            avi.width;
+
+        const h =
+            avi.height;
+
+
+        ctx.save();
+
+        ctx.translate(
+            x,
+            y
+        );
+
+
+        /* shadow */
+
+        if (avi.grounded) {
+
+            ctx.fillStyle =
+                "rgba(47,47,47,0.12)";
+
+            ctx.beginPath();
+
+            ctx.ellipse(
+                w * 0.52,
+                h + 5,
+                w * 0.48,
+                5,
+                0,
+                0,
+                Math.PI * 2
+            );
+
+            ctx.fill();
+        }
+
+
+        /* backpack */
+
+        ctx.fillStyle =
+            COLORS.blue;
+
+        roundedRect(
+            w * 0.03,
+            h * 0.36,
+            w * 0.21,
+            h * 0.39,
+            6
+        );
+
+        ctx.fill();
+
+
+        /* helmet */
+
+        ctx.fillStyle =
+            COLORS.bg;
+
+        ctx.strokeStyle =
+            COLORS.blue;
+
+        ctx.lineWidth = 2;
+
+        ctx.beginPath();
+
+        ctx.arc(
+            w * 0.50,
+            h * 0.21,
+            w * 0.25,
+            0,
+            Math.PI * 2
+        );
+
+        ctx.fill();
+
+        ctx.stroke();
+
+
+        /* visor */
+
+        ctx.fillStyle =
+            COLORS.blue;
+
+        roundedRect(
+            w * 0.36,
+            h * 0.12,
+            w * 0.28,
+            h * 0.18,
+            7
+        );
+
+        ctx.fill();
+
+
+        /* body */
+
+        ctx.fillStyle =
+            COLORS.bg;
+
+        ctx.strokeStyle =
+            COLORS.blue;
+
+        ctx.lineWidth = 2;
+
+        roundedRect(
+            w * 0.28,
+            h * 0.38,
+            w * 0.44,
+            h * 0.38,
+            8
+        );
+
+        ctx.fill();
+
+        ctx.stroke();
+
+
+        /* Avenmark copper detail */
+
+        ctx.fillStyle =
+            COLORS.copper;
+
+        roundedRect(
+            w * 0.46,
+            h * 0.43,
+            w * 0.09,
+            h * 0.15,
+            2
+        );
+
+        ctx.fill();
+
+
+        /* legs */
+
+        ctx.strokeStyle =
+            COLORS.blue;
+
+        ctx.lineWidth = 5;
+
+        ctx.lineCap = "round";
+
+        const running =
+            Math.sin(
+                elapsed * 0.025
+            );
+
+        ctx.beginPath();
+
+        ctx.moveTo(
+            w * 0.40,
+            h * 0.74
+        );
+
+        ctx.lineTo(
+            w * (0.32 + running * 0.10),
+            h * 0.96
+        );
+
+        ctx.stroke();
+
+
+        ctx.beginPath();
+
+        ctx.moveTo(
+            w * 0.60,
+            h * 0.74
+        );
+
+        ctx.lineTo(
+            w * (0.70 - running * 0.10),
+            h * 0.96
+        );
+
+        ctx.stroke();
+
+
+        /* boots */
+
+        ctx.lineWidth = 6;
+
+        ctx.beginPath();
+
+        ctx.moveTo(
+            w * (0.27 + running * 0.10),
+            h * 0.97
+        );
+
+        ctx.lineTo(
+            w * (0.39 + running * 0.10),
+            h * 0.97
+        );
+
+        ctx.stroke();
+
+
+        ctx.beginPath();
+
+        ctx.moveTo(
+            w * (0.64 - running * 0.10),
+            h * 0.97
+        );
+
+        ctx.lineTo(
+            w * (0.76 - running * 0.10),
+            h * 0.97
+        );
+
+        ctx.stroke();
+
+
+        /* laptop */
+
+        const laptopX =
+            w * 0.63;
+
+        const laptopY =
+            h * 0.48;
+
+
+        /* laptop screen */
+
+        ctx.fillStyle =
+            COLORS.blue;
+
+        roundedRect(
+            laptopX,
+            laptopY,
+            w * 0.25,
+            h * 0.17,
+            3
+        );
+
+        ctx.fill();
+
+
+        /* screen face */
+
+        ctx.fillStyle =
+            COLORS.bg;
+
+        roundedRect(
+            laptopX + 3,
+            laptopY + 3,
+            w * 0.19,
+            h * 0.10,
+            2
+        );
+
+        ctx.fill();
+
+
+        /* copper screen mark */
+
+        ctx.fillStyle =
+            COLORS.copper;
+
+        ctx.fillRect(
+            laptopX + 7,
+            laptopY + 7,
+            5,
+            2
+        );
+
+
+        /* laptop base */
+
+        ctx.fillStyle =
+            COLORS.blue;
+
+        ctx.beginPath();
+
+        ctx.moveTo(
+            laptopX - 4,
+            laptopY + h * 0.17
+        );
+
+        ctx.lineTo(
+            laptopX + w * 0.28,
+            laptopY + h * 0.17
+        );
+
+        ctx.lineTo(
+            laptopX + w * 0.23,
+            laptopY + h * 0.21
+        );
+
+        ctx.lineTo(
+            laptopX,
+            laptopY + h * 0.21
+        );
+
+        ctx.closePath();
+
+        ctx.fill();
+
+
+        /* arms holding laptop */
+
+        ctx.strokeStyle =
+            COLORS.blue;
+
+        ctx.lineWidth = 5;
+
+        ctx.beginPath();
+
+        ctx.moveTo(
+            w * 0.34,
+            h * 0.47
+        );
+
+        ctx.lineTo(
+            w * 0.66,
+            h * 0.54
+        );
+
+        ctx.stroke();
+
+
+        ctx.beginPath();
+
+        ctx.moveTo(
+            w * 0.66,
+            h * 0.49
+        );
+
+        ctx.lineTo(
+            w * 0.76,
+            h * 0.55
+        );
+
+        ctx.stroke();
+
+
+        ctx.restore();
+    }
+
+
+    /* ========================================================
+       GROUND
+    ======================================================== */
+
+    function drawGround(width) {
+
+        ctx.strokeStyle =
+            "rgba(47,47,47,0.30)";
+
+        ctx.lineWidth = 1.4;
+
+        ctx.beginPath();
+
+        ctx.moveTo(
+            0,
+            groundY + 1
+        );
+
+        ctx.lineTo(
+            width,
+            groundY + 1
+        );
+
+        ctx.stroke();
+
+
+        /* very subtle lunar marks */
+
+        const spacing = 120;
+
+        for (
+            let x = -spacing + groundOffset;
+            x < width + spacing;
+            x += spacing
+        ) {
+
+            ctx.strokeStyle =
+                "rgba(47,47,47,0.08)";
+
+            ctx.beginPath();
+
+            ctx.moveTo(
+                x,
+                groundY + 13
+            );
+
+            ctx.lineTo(
+                x + 28,
+                groundY + 13
+            );
+
+            ctx.stroke();
         }
     }
 
-    /* ==========================================================
-       DRAW — MILESTONE MESSAGE
-    ========================================================== */
 
-    function drawMessage() {
+    /* ========================================================
+       CONTINUE MESSAGE
+    ======================================================== */
+
+    function drawMessage(width) {
+
         if (
-            !game.message ||
-            game.messageTimer <= 0
+            !currentMessage ||
+            messageAlpha <= 0
         ) {
             return;
         }
 
-        const progress =
-            game.messageTimer < 30
-                ? game.messageTimer / 30
-                : 1;
-
         ctx.save();
 
         ctx.globalAlpha =
-            Math.min(1, progress);
+            messageAlpha;
 
-        ctx.fillStyle = COLORS.blue;
+        ctx.fillStyle =
+            COLORS.copper;
 
         ctx.font =
-            '600 14px "Montserrat", sans-serif';
+            "700 12px Montserrat, sans-serif";
 
         ctx.textAlign = "center";
 
         ctx.fillText(
-            game.message,
+            currentMessage,
             width / 2,
-            height * 0.25
+            48
         );
 
         ctx.restore();
     }
 
-    /* ==========================================================
+
+    /* ========================================================
        DRAW
-    ========================================================== */
+    ======================================================== */
 
     function draw() {
-        drawBackground();
-        drawGround();
-        drawObstacles();
-        drawAvi();
-        drawMessage();
-    }
 
-    /* ==========================================================
-       GAME LOOP
-    ========================================================== */
+        const width =
+            canvas.clientWidth;
 
-    function gameLoop(timestamp) {
-        if (!game.lastTime) {
-            game.lastTime = timestamp;
+        const height =
+            canvas.clientHeight;
+
+        if (!width || !height) {
+            return;
         }
 
-        let dt =
-            (timestamp - game.lastTime) / 16.6667;
 
-        game.lastTime = timestamp;
+        ctx.clearRect(
+            0,
+            0,
+            width,
+            height
+        );
 
-        /*
-         * Prevent a browser tab switch or frame hitch
-         * from launching Avi across the screen.
-         */
-        dt = Math.min(dt, 2);
 
-        if (game.messageTimer > 0) {
-            game.messageTimer -= dt;
+        ctx.fillStyle =
+            COLORS.bg;
+
+        ctx.fillRect(
+            0,
+            0,
+            width,
+            height
+        );
+
+
+        drawStars();
+
+        drawGround(width);
+
+
+        for (const piece of debris) {
+
+            drawDebrisPiece(piece);
+        }
+
+
+        for (const obstacle of obstacles) {
+
+            if (obstacle.type === "ufo") {
+
+                drawUFO(obstacle);
+
+            } else {
+
+                drawCrater(obstacle);
+            }
+        }
+
+
+        drawAvi();
+
+        drawMessage(width);
+    }
+
+
+    /* ========================================================
+       GAME LOOP
+    ======================================================== */
+
+    function gameLoop(timestamp) {
+
+        if (state !== "running") {
+
+            animationFrame = null;
+
+            return;
+        }
+
+
+        if (!lastTime) {
+
+            lastTime = timestamp;
+        }
+
+
+        let delta =
+            timestamp - lastTime;
+
+        lastTime =
+            timestamp;
+
+
+        delta =
+            Math.min(
+                delta,
+                40
+            );
+
+
+        update(delta);
+
+        draw();
+
+
+        animationFrame =
+            requestAnimationFrame(
+                gameLoop
+            );
+    }
+
+
+    /* ========================================================
+       UPDATE
+    ======================================================== */
+
+    function update(delta) {
+
+        elapsed += delta;
+
+
+        const movement =
+            gameSpeed *
+            delta;
+
+
+        distance += movement;
+
+        score =
+            Math.floor(
+                distance / 12
+            );
+
+
+        groundOffset -=
+            movement * 0.65;
+
+        if (groundOffset < -120) {
+
+            groundOffset += 120;
+        }
+
+
+        avi.bob +=
+            delta * 0.018;
+
+
+        updateAvi(delta);
+
+        updateObstacles(movement);
+
+        updateDebris(movement);
+
+        updateMessage(delta);
+
+        updateScore();
+
+
+        if (
+            score > 0 &&
+            score % 500 === 0 &&
+            Math.floor(
+                distance / 12
+            ) !==
+            Math.floor(
+                (distance - movement) / 12
+            )
+        ) {
+
+            currentMessage =
+                "Continue plz :)";
+
+            messageAlpha = 1;
+
+            messageTimer = 1900;
+
+            playMilestoneSound();
+        }
+    }
+
+
+    /* ========================================================
+       AVI UPDATE
+    ======================================================== */
+
+    function updateAvi(delta) {
+
+        if (!avi.grounded) {
+
+            avi.velocityY +=
+                avi.gravity *
+                delta;
+
+            avi.y +=
+                avi.velocityY *
+                delta;
+
+
+            if (
+                avi.y >=
+                groundY - avi.height
+            ) {
+
+                avi.y =
+                    groundY - avi.height;
+
+                avi.velocityY = 0;
+
+                avi.grounded = true;
+            }
+        }
+    }
+
+
+    /* ========================================================
+       OBSTACLES
+    ======================================================== */
+
+    function updateObstacles(movement) {
+
+        obstacleTimer += movement;
+
+        if (
+            obstacleTimer >=
+            nextObstacle
+        ) {
+
+            spawnObstacle();
+
+            obstacleTimer = 0;
+
+            const difficulty =
+                Math.min(
+                    score / 3500,
+                    1
+                );
+
+            const minimum =
+                850 -
+                difficulty * 170;
+
+            const maximum =
+                1450 -
+                difficulty * 260;
+
+            nextObstacle =
+                randomBetween(
+                    minimum,
+                    maximum
+                );
+        }
+
+
+        for (
+            let i = obstacles.length - 1;
+            i >= 0;
+            i--
+        ) {
+
+            const obstacle =
+                obstacles[i];
+
+            obstacle.x -= movement;
+
+
+            if (
+                obstacle.x +
+                obstacle.width <
+                -40
+            ) {
+
+                obstacles.splice(
+                    i,
+                    1
+                );
+
+                continue;
+            }
+
+
+            if (
+                collision(
+                    avi,
+                    obstacle
+                )
+            ) {
+
+                endGame();
+
+                return;
+            }
+        }
+    }
+
+
+    function spawnObstacle() {
+
+        const width =
+            canvas.clientWidth;
+
+        const useUFO =
+            score >= 250 &&
+            Math.random() < 0.38;
+
+
+        if (useUFO) {
+
+            const obstacleWidth =
+                randomBetween(
+                    48,
+                    62
+                );
+
+            const obstacleHeight =
+                randomBetween(
+                    27,
+                    34
+                );
+
+            obstacles.push({
+
+                type: "ufo",
+
+                x:
+                    width + 40,
+
+                y:
+                    groundY -
+                    randomBetween(
+                        78,
+                        132
+                    ),
+
+                width:
+                    obstacleWidth,
+
+                height:
+                    obstacleHeight,
+
+                seed:
+                    Math.random() * 100
+            });
+
         } else {
-            game.message = "";
+
+            const obstacleWidth =
+                randomBetween(
+                    48,
+                    72
+                );
+
+            const obstacleHeight =
+                randomBetween(
+                    19,
+                    27
+                );
+
+            obstacles.push({
+
+                type: "crater",
+
+                x:
+                    width + 40,
+
+                y:
+                    groundY -
+                    obstacleHeight * 0.75,
+
+                width:
+                    obstacleWidth,
+
+                height:
+                    obstacleHeight
+            });
+        }
+    }
+
+
+    /* ========================================================
+       DEBRIS
+    ======================================================== */
+
+    function updateDebris(movement) {
+
+        debrisTimer += movement;
+
+        if (
+            debrisTimer >=
+            nextDebris
+        ) {
+
+            spawnDebris();
+
+            debrisTimer = 0;
+
+            nextDebris =
+                randomBetween(
+                    650,
+                    1300
+                );
+        }
+
+
+        for (
+            let i = debris.length - 1;
+            i >= 0;
+            i--
+        ) {
+
+            const piece =
+                debris[i];
+
+            piece.x -=
+                movement * 0.65;
+
+            piece.rotation +=
+                0.002 * movement;
+
+
+            if (
+                piece.x <
+                -20
+            ) {
+
+                debris.splice(
+                    i,
+                    1
+                );
+            }
+        }
+    }
+
+
+    function spawnDebris() {
+
+        const width =
+            canvas.clientWidth;
+
+        debris.push({
+
+            x:
+                width + 30,
+
+            y:
+                randomBetween(
+                    groundY + 17,
+                    groundY + 35
+                ),
+
+            size:
+                randomBetween(
+                    2,
+                    4
+                ),
+
+            rotation:
+                Math.random() *
+                Math.PI * 2
+        });
+    }
+
+
+    /* ========================================================
+       COLLISION
+    ======================================================== */
+
+    function collision(
+        player,
+        obstacle
+    ) {
+
+        let px =
+            player.x +
+            player.width * 0.25;
+
+        let py =
+            player.y +
+            player.height * 0.12;
+
+        let pw =
+            player.width * 0.52;
+
+        let ph =
+            player.height * 0.83;
+
+
+        if (
+            obstacle.type === "ufo"
+        ) {
+
+            return (
+                px <
+                    obstacle.x +
+                    obstacle.width * 0.82 &&
+
+                px + pw >
+                    obstacle.x +
+                    obstacle.width * 0.18 &&
+
+                py <
+                    obstacle.y +
+                    obstacle.height * 0.80 &&
+
+                py + ph >
+                    obstacle.y +
+                    obstacle.height * 0.20
+            );
+        }
+
+
+        return (
+            px <
+                obstacle.x +
+                obstacle.width * 0.90 &&
+
+            px + pw >
+                obstacle.x +
+                obstacle.width * 0.10 &&
+
+            py + ph >
+                obstacle.y +
+                obstacle.height * 0.30
+        );
+    }
+
+
+    /* ========================================================
+       MESSAGE
+    ======================================================== */
+
+    function updateMessage(delta) {
+
+        if (!currentMessage) {
+            return;
+        }
+
+        messageTimer -= delta;
+
+        if (messageTimer <= 0) {
+
+            messageAlpha -=
+                delta / 450;
+
+            if (messageAlpha <= 0) {
+
+                messageAlpha = 0;
+
+                currentMessage = "";
+            }
+        }
+    }
+
+
+    /* ========================================================
+       SCORE
+    ======================================================== */
+
+    function updateScore() {
+
+        scoreDisplay.textContent =
+            score.toString();
+
+        highScoreDisplay.textContent =
+            highScore.toString();
+    }
+
+
+    /* ========================================================
+       START
+    ======================================================== */
+
+    async function startGame() {
+
+        await resumeAudio();
+
+        state = "running";
+
+        hideScreen(
+            startScreen
+        );
+
+        hideScreen(
+            gameOverScreen
+        );
+
+        hideScreen(
+            pauseScreen
+        );
+
+
+        pauseButton.disabled = false;
+
+        resetButton.disabled = false;
+
+
+        lastTime = 0;
+
+        if (!animationFrame) {
+
+            animationFrame =
+                requestAnimationFrame(
+                    gameLoop
+                );
+        }
+    }
+
+
+    /* ========================================================
+       PAUSE
+    ======================================================== */
+
+    function pauseGame() {
+
+        if (
+            state !== "running"
+        ) {
+            return;
+        }
+
+        state = "paused";
+
+        hideScreen(
+            startScreen
+        );
+
+        hideScreen(
+            gameOverScreen
+        );
+
+        showScreen(
+            pauseScreen
+        );
+
+        pauseButton.textContent =
+            "Resume";
+
+        if (animationFrame) {
+
+            cancelAnimationFrame(
+                animationFrame
+            );
+
+            animationFrame = null;
+        }
+
+        draw();
+    }
+
+
+    /* ========================================================
+       RESUME
+    ======================================================== */
+
+    async function resumeGame() {
+
+        if (
+            state !== "paused"
+        ) {
+            return;
+        }
+
+        await resumeAudio();
+
+        state = "running";
+
+        hideScreen(
+            pauseScreen
+        );
+
+        pauseButton.textContent =
+            "Pause";
+
+        lastTime = 0;
+
+        animationFrame =
+            requestAnimationFrame(
+                gameLoop
+            );
+    }
+
+
+    /* ========================================================
+       RESET
+    ======================================================== */
+
+    function resetGame() {
+
+        state = "ready";
+
+        if (animationFrame) {
+
+            cancelAnimationFrame(
+                animationFrame
+            );
+
+            animationFrame = null;
+        }
+
+
+        distance = 0;
+
+        score = 0;
+
+        elapsed = 0;
+
+        lastTime = 0;
+
+        obstacleTimer = 0;
+
+        debrisTimer = 0;
+
+        nextObstacle =
+            randomBetween(
+                1050,
+                1650
+            );
+
+        nextDebris =
+            randomBetween(
+                500,
+                1100
+            );
+
+
+        obstacles = [];
+
+        debris = [];
+
+
+        currentMessage = "";
+
+        messageAlpha = 0;
+
+        messageTimer = 0;
+
+
+        avi.velocityY = 0;
+
+        avi.grounded = true;
+
+        avi.y =
+            groundY -
+            avi.height;
+
+
+        pauseButton.textContent =
+            "Pause";
+
+
+        showScreen(
+            startScreen
+        );
+
+        hideScreen(
+            pauseScreen
+        );
+
+        hideScreen(
+            gameOverScreen
+        );
+
+
+        updateScore();
+
+        draw();
+    }
+
+
+    /* ========================================================
+       GAME OVER
+    ======================================================== */
+
+    function endGame() {
+
+        if (
+            state === "gameover"
+        ) {
+            return;
+        }
+
+
+        state = "gameover";
+
+
+        if (score > highScore) {
+
+            highScore = score;
+
+            localStorage.setItem(
+                "avenmark-avi-high-score",
+                highScore.toString()
+            );
+        }
+
+
+        finalScoreDisplay.textContent =
+            score.toString();
+
+
+        updateScore();
+
+        playCrashSound();
+
+
+        showScreen(
+            gameOverScreen
+        );
+
+        hideScreen(
+            pauseScreen
+        );
+
+        hideScreen(
+            startScreen
+        );
+
+
+        pauseButton.textContent =
+            "Pause";
+
+
+        if (animationFrame) {
+
+            cancelAnimationFrame(
+                animationFrame
+            );
+
+            animationFrame = null;
+        }
+
+        draw();
+    }
+
+
+    /* ========================================================
+       JUMP
+    ======================================================== */
+
+    async function jump() {
+
+        if (
+            state !== "running"
+        ) {
+            return;
         }
 
         if (
-            game.running &&
-            !game.paused &&
-            !game.gameOver
+            !avi.grounded
         ) {
-            avi.update(dt);
-            updateObstacles(dt);
-            updateStars(dt);
-            updateDebris(dt);
-            updateScore(dt);
-
-            checkCollisions();
-        }
-
-        draw();
-
-        game.animationFrame =
-            requestAnimationFrame(gameLoop);
-    }
-
-    /* ==========================================================
-       START
-    ========================================================== */
-
-    function startGame() {
-        ensureAudio();
-
-        game.running = true;
-        game.paused = false;
-        game.gameOver = false;
-
-        game.score = 0;
-        game.distance = 0;
-
-        game.nextObstacle = 850;
-        game.nextMessage = 500;
-
-        game.message = "";
-        game.messageTimer = 0;
-
-        obstacles.length = 0;
-
-        avi.reset();
-
-        updateScoreUI();
-
-        if (startScreen) {
-            startScreen.classList.remove("visible");
-            startScreen.setAttribute(
-                "aria-hidden",
-                "true"
-            );
-        }
-
-        if (gameOverScreen) {
-            gameOverScreen.classList.remove("visible");
-            gameOverScreen.setAttribute(
-                "aria-hidden",
-                "true"
-            );
-        }
-
-        if (pauseButton) {
-            pauseButton.textContent = "Pause";
-            pauseButton.setAttribute(
-                "aria-label",
-                "Pause game"
-            );
-        }
-
-        game.lastTime = performance.now();
-
-        draw();
-    }
-
-    /* ==========================================================
-       GAME OVER
-    ========================================================== */
-
-    function endGame() {
-        if (game.gameOver) {
             return;
         }
 
-        game.gameOver = true;
-        game.running = false;
+        await resumeAudio();
 
-        playSound("gameover");
+        avi.grounded = false;
 
-        if (gameOverScoreElement) {
-            gameOverScoreElement.textContent =
-                String(game.score).padStart(5, "0");
-        }
+        avi.velocityY =
+            avi.jumpForce;
 
-        if (gameOverHighScoreElement) {
-            gameOverHighScoreElement.textContent =
-                String(game.highScore).padStart(5, "0");
-        }
-
-        if (gameOverScreen) {
-            gameOverScreen.classList.add("visible");
-            gameOverScreen.setAttribute(
-                "aria-hidden",
-                "false"
-            );
-        }
+        playJumpSound();
     }
 
-    /* ==========================================================
-       PAUSE
-    ========================================================== */
 
-    function togglePause() {
-        if (!game.running || game.gameOver) {
-            return;
+    /* ========================================================
+       SCREEN HELPERS
+    ======================================================== */
+
+    function showScreen(screen) {
+
+        screen.classList.add(
+            "active"
+        );
+    }
+
+
+    function hideScreen(screen) {
+
+        screen.classList.remove(
+            "active"
+        );
+    }
+
+
+    /* ========================================================
+       CONTROLS
+    ======================================================== */
+
+    startButton.addEventListener(
+        "click",
+        startGame
+    );
+
+
+    restartButton.addEventListener(
+        "click",
+        async () => {
+
+            resetGame();
+
+            await startGame();
         }
+    );
 
-        game.paused = !game.paused;
 
-        if (game.paused) {
-            if (pauseButton) {
-                pauseButton.textContent = "Resume";
-                pauseButton.setAttribute(
-                    "aria-label",
-                    "Resume game"
+    resumeButton.addEventListener(
+        "click",
+        resumeGame
+    );
+
+
+    pauseButton.addEventListener(
+        "click",
+        async () => {
+
+            if (
+                state === "running"
+            ) {
+
+                pauseGame();
+
+            } else if (
+                state === "paused"
+            ) {
+
+                await resumeGame();
+            }
+        }
+    );
+
+
+    resetButton.addEventListener(
+        "click",
+        resetGame
+    );
+
+
+    speedSlider.addEventListener(
+        "input",
+        () => {
+
+            speedLevel =
+                Number(
+                    speedSlider.value
+                );
+
+            gameSpeed =
+                SPEEDS[speedLevel];
+
+            speedValue.textContent =
+                speedLevel.toString();
+        }
+    );
+
+
+    soundToggle.addEventListener(
+        "change",
+        async () => {
+
+            soundEnabled =
+                soundToggle.checked;
+
+            initAudio();
+
+            if (
+                audioContext &&
+                audioContext.state ===
+                "suspended"
+            ) {
+
+                await resumeAudio();
+            }
+
+            if (masterGain) {
+
+                masterGain.gain.setTargetAtTime(
+
+                    soundEnabled
+                        ? 0.055
+                        : 0,
+
+                    audioContext.currentTime,
+
+                    0.025
                 );
             }
-        } else {
-            if (pauseButton) {
-                pauseButton.textContent = "Pause";
-                pauseButton.setAttribute(
-                    "aria-label",
-                    "Pause game"
+
+            if (soundEnabled) {
+
+                playTone(
+                    520,
+                    0.08,
+                    "triangle",
+                    0.035
                 );
             }
-
-            game.lastTime = performance.now();
         }
+    );
 
-        draw();
-    }
 
-    /* ==========================================================
-       RESET
-    ========================================================== */
-
-    function resetGame() {
-        game.running = false;
-        game.paused = false;
-        game.gameOver = false;
-
-        game.score = 0;
-        game.distance = 0;
-
-        game.nextObstacle = 850;
-        game.nextMessage = 500;
-
-        game.message = "";
-        game.messageTimer = 0;
-
-        obstacles.length = 0;
-
-        avi.reset();
-
-        updateScoreUI();
-
-        if (pauseButton) {
-            pauseButton.textContent = "Pause";
-            pauseButton.setAttribute(
-                "aria-label",
-                "Pause game"
-            );
-        }
-
-        if (gameOverScreen) {
-            gameOverScreen.classList.remove("visible");
-            gameOverScreen.setAttribute(
-                "aria-hidden",
-                "true"
-            );
-        }
-
-        if (startScreen) {
-            startScreen.classList.add("visible");
-            startScreen.setAttribute(
-                "aria-hidden",
-                "false"
-            );
-        }
-
-        draw();
-    }
-
-    /* ==========================================================
-       AUDIO INITIALIZATION
-    ========================================================== */
-
-    function ensureAudio() {
-        if (!soundEnabled) {
-            return;
-        }
-
-        getAudioContext();
-    }
-
-    /* ==========================================================
-       INPUT
-    ========================================================== */
-
-    function handleJumpInput(event) {
-        if (event) {
-            /*
-             * Don't steal keyboard input from controls.
-             */
-            if (
-                event.target &&
-                (
-                    event.target.tagName === "BUTTON" ||
-                    event.target.tagName === "INPUT"
-                )
-            ) {
-                return;
-            }
-
-            if (
-                event.type === "keydown" &&
-                (
-                    event.code !== "Space" &&
-                    event.code !== "ArrowUp" &&
-                    event.code !== "KeyW"
-                )
-            ) {
-                return;
-            }
-
-            if (
-                event.type === "keydown" &&
-                event.repeat
-            ) {
-                return;
-            }
-
-            if (
-                event.type === "keydown" &&
-                event.code === "Space"
-            ) {
-                event.preventDefault();
-            }
-        }
-
-        if (!game.running && !game.gameOver) {
-            startGame();
-            return;
-        }
-
-        avi.jump();
-    }
+    /* ========================================================
+       KEYBOARD
+    ======================================================== */
 
     window.addEventListener(
         "keydown",
-        handleJumpInput
+        async (event) => {
+
+            if (
+                event.code === "Space" ||
+                event.code === "ArrowUp" ||
+                event.code === "KeyW"
+            ) {
+
+                event.preventDefault();
+
+                if (
+                    state === "ready"
+                ) {
+
+                    await startGame();
+
+                    return;
+                }
+
+                if (
+                    state === "gameover"
+                ) {
+
+                    resetGame();
+
+                    await startGame();
+
+                    return;
+                }
+
+                if (
+                    state === "paused"
+                ) {
+
+                    await resumeGame();
+
+                    return;
+                }
+
+                await jump();
+            }
+
+
+            if (
+                event.code === "KeyP"
+            ) {
+
+                if (
+                    state === "running"
+                ) {
+
+                    pauseGame();
+
+                } else if (
+                    state === "paused"
+                ) {
+
+                    await resumeGame();
+                }
+            }
+        }
     );
+
+
+    /* ========================================================
+       POINTER / TOUCH
+    ======================================================== */
 
     canvas.addEventListener(
         "pointerdown",
-        event => {
-            event.preventDefault();
-            handleJumpInput();
+        async () => {
+
+            if (
+                state === "running"
+            ) {
+
+                await jump();
+            }
         }
     );
 
-    /* ==========================================================
-       BUTTONS
-    ========================================================== */
 
-    if (startButton) {
-        startButton.addEventListener(
-            "click",
-            startGame
-        );
-    }
+    /* ========================================================
+       UTILITIES
+    ======================================================== */
 
-    if (restartButton) {
-        restartButton.addEventListener(
-            "click",
-            startGame
-        );
-    }
-
-    if (pauseButton) {
-        pauseButton.addEventListener(
-            "click",
-            togglePause
-        );
-    }
-
-    if (resetButton) {
-        resetButton.addEventListener(
-            "click",
-            resetGame
-        );
-    }
-
-    /* ==========================================================
-       TOUCH / MOBILE
-    ========================================================== */
-
-    let touchStartY = 0;
-
-    canvas.addEventListener(
-        "touchstart",
-        event => {
-            if (!event.touches.length) {
-                return;
-            }
-
-            touchStartY =
-                event.touches[0].clientY;
-        },
-        { passive: true }
-    );
-
-    canvas.addEventListener(
-        "touchend",
-        event => {
-            if (!event.changedTouches.length) {
-                return;
-            }
-
-            const touchEndY =
-                event.changedTouches[0].clientY;
-
-            const difference =
-                touchStartY - touchEndY;
-
-            /*
-             * A swipe upward or ordinary tap can jump.
-             */
-            if (difference > 25 || Math.abs(difference) < 25) {
-                handleJumpInput();
-            }
-        },
-        { passive: true }
-    );
-
-    /* ==========================================================
-       UTILITY
-    ========================================================== */
-
-    function roundRect(
-        context,
-        x,
-        y,
-        w,
-        h,
-        radius
+    function randomBetween(
+        min,
+        max
     ) {
-        const r = Math.min(
-            radius,
-            w / 2,
-            h / 2
+
+        return (
+            Math.random() *
+            (max - min) +
+            min
         );
-
-        context.beginPath();
-
-        context.moveTo(x + r, y);
-        context.arcTo(
-            x + w,
-            y,
-            x + w,
-            y + h,
-            r
-        );
-
-        context.arcTo(
-            x + w,
-            y + h,
-            x,
-            y + h,
-            r
-        );
-
-        context.arcTo(
-            x,
-            y + h,
-            x,
-            y,
-            r
-        );
-
-        context.arcTo(
-            x,
-            y,
-            x + w,
-            y,
-            r
-        );
-
-        context.closePath();
     }
 
-    /* ==========================================================
-       INITIALIZE
-    ========================================================== */
+
+    /* ========================================================
+       INITIALIZATION
+    ======================================================== */
 
     function initialize() {
+
+        soundEnabled =
+            soundToggle.checked;
+
+        speedLevel =
+            Number(
+                speedSlider.value
+            );
+
+        gameSpeed =
+            SPEEDS[speedLevel];
+
+
+        highScoreDisplay.textContent =
+            highScore.toString();
+
+        scoreDisplay.textContent =
+            "0";
+
+
         resizeCanvas();
 
-        avi.reset();
-
-        createStars();
-        createDebris();
-
-        updateScoreUI();
-        readSpeed();
-
-        /*
-         * Make sure the game begins in a clean,
-         * not-running state.
-         */
-        game.running = false;
-        game.paused = false;
-        game.gameOver = false;
-
-        if (startScreen) {
-            startScreen.classList.add("visible");
-            startScreen.setAttribute(
-                "aria-hidden",
-                "false"
-            );
-        }
-
-        if (gameOverScreen) {
-            gameOverScreen.classList.remove("visible");
-            gameOverScreen.setAttribute(
-                "aria-hidden",
-                "true"
-            );
-        }
-
-        draw();
-
-        game.lastTime = performance.now();
-
-        game.animationFrame =
-            requestAnimationFrame(gameLoop);
+        resetGame();
     }
+
 
     initialize();
 
