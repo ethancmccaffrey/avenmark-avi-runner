@@ -2,282 +2,133 @@
 <html lang="en">
 <head>
     <meta charset="UTF-8">
-
-    <meta
-        name="viewport"
-        content="width=device-width, initial-scale=1.0, viewport-fit=cover"
-    >
-
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta name="theme-color" content="#F5F5F2">
     <title>Avenmark Avi Runner</title>
 
-    <link
-        rel="preconnect"
-        href="https://fonts.googleapis.com"
-    >
-
-    <link
-        rel="preconnect"
-        href="https://fonts.gstatic.com"
-        crossorigin
-    >
-
-    <link
-        href="https://fonts.googleapis.com/css2?family=Montserrat:wght@500;600;700;800&display=swap"
-        rel="stylesheet"
-    >
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Montserrat:wght@500;600;700;800&display=swap" rel="stylesheet">
 
     <link rel="stylesheet" href="style.css">
 </head>
 
 <body>
 
-    <main class="app">
+<header class="app-header">
+    <div class="brand">
+        <img src="AVA.png" alt="Avenmark" class="logo">
+        <div class="brand-copy">
+            <h1>Avenmark Avi Runner</h1>
+        </div>
+    </div>
 
-        <!-- =====================================================
-             HEADER
-        ====================================================== -->
+    <div class="header-controls">
+        <button id="pause-button" class="control-button" type="button">
+            Pause
+        </button>
 
-        <header class="app-header">
+        <button id="reset-button" class="control-button" type="button">
+            Reset
+        </button>
+    </div>
+</header>
 
-            <div class="brand">
-                <img
-                    src="AVA.png"
-                    alt="Avenmark"
-                    class="brand-logo"
-                >
+<main class="runner-shell">
 
-                <div class="brand-title">
-                    <h1>Avenmark Avi Runner</h1>
+    <section class="game-card" aria-label="Avenmark Avi Runner">
+
+        <div class="game-area">
+            <canvas id="game-canvas"></canvas>
+
+            <div id="start-screen" class="game-message">
+                <div class="message-inner">
+                    <span class="message-kicker">AVENMARK</span>
+                    <h2>Avi is ready.</h2>
+                    <p>Jump. Run. Keep going.</p>
+                    <button id="start-button" class="primary-button" type="button">
+                        Start
+                    </button>
                 </div>
             </div>
 
-            <div class="header-controls">
-
-                <button
-                    id="pause-button"
-                    class="header-button"
-                    type="button"
-                    aria-label="Pause game"
-                >
-                    Pause
-                </button>
-
-                <button
-                    id="reset-button"
-                    class="header-button"
-                    type="button"
-                    aria-label="Reset game"
-                >
-                    Reset
-                </button>
-
-            </div>
-
-        </header>
-
-
-        <!-- =====================================================
-             GAME AREA
-        ====================================================== -->
-
-        <section class="game-section">
-
-            <div class="game-card">
-
-                <canvas
-                    id="game-canvas"
-                    aria-label="Avenmark Avi Runner game"
-                ></canvas>
-
-
-                <!-- START -->
-                <div
-                    id="start-screen"
-                    class="game-screen active"
-                >
-
-                    <div class="screen-content">
-
-                        <p class="screen-eyebrow">
-                            AVENMARK
-                        </p>
-
-                        <h2>Avi is ready.</h2>
-
-                        <p class="screen-copy">
-                            Run. Jump. Keep going.
-                        </p>
-
-                        <button
-                            id="start-button"
-                            class="primary-button"
-                            type="button"
-                        >
-                            Start
-                        </button>
-
-                    </div>
-
+            <div id="game-over-screen" class="game-message hidden">
+                <div class="message-inner">
+                    <span class="message-kicker">AVENMARK AVI RUNNER</span>
+                    <h2>Is that all you got?</h2>
+                    <p id="final-score">Score 0</p>
+                    <button id="restart-button" class="primary-button" type="button">
+                        Run again
+                    </button>
                 </div>
+            </div>
 
-
-                <!-- PAUSED -->
-                <div
-                    id="pause-screen"
-                    class="game-screen"
-                >
-
-                    <div class="screen-content">
-
-                        <p class="screen-eyebrow">
-                            AVENMARK
-                        </p>
-
-                        <h2>Paused.</h2>
-
-                        <button
-                            id="resume-button"
-                            class="primary-button"
-                            type="button"
-                        >
-                            Continue
-                        </button>
-
-                    </div>
-
+            <div id="pause-screen" class="game-message hidden">
+                <div class="message-inner">
+                    <span class="message-kicker">PAUSED</span>
+                    <h2>Take a breath.</h2>
+                    <button id="resume-button" class="primary-button" type="button">
+                        Resume
+                    </button>
                 </div>
-
-
-                <!-- GAME OVER -->
-                <div
-                    id="game-over-screen"
-                    class="game-screen"
-                >
-
-                    <div class="screen-content">
-
-                        <p class="screen-eyebrow">
-                            AVENMARK
-                        </p>
-
-                        <h2>That was close.</h2>
-
-                        <p class="final-score">
-                            Score <strong id="final-score">0</strong>
-                        </p>
-
-                        <button
-                            id="restart-button"
-                            class="primary-button"
-                            type="button"
-                        >
-                            Run again
-                        </button>
-
-                    </div>
-
-                </div>
-
             </div>
 
-        </section>
+            <div id="continue-message" class="continue-message">
+                Continue plz :)
+            </div>
+        </div>
 
+        <div class="control-panel">
 
-        <!-- =====================================================
-             CONTROL PANEL
-        ====================================================== -->
-
-        <section class="control-panel">
-
-            <div class="stat-block">
-
-                <span class="panel-label">
-                    Score
-                </span>
-
-                <strong
-                    id="score-display"
-                    class="panel-value"
-                >
-                    0
-                </strong>
-
+            <div class="score-group">
+                <span class="panel-label">Score</span>
+                <strong id="score-display">0</strong>
             </div>
 
-
-            <div class="stat-block">
-
-                <span class="panel-label">
-                    High score
-                </span>
-
-                <strong
-                    id="high-score-display"
-                    class="panel-value"
-                >
-                    0
-                </strong>
-
+            <div class="score-group">
+                <span class="panel-label">High score</span>
+                <strong id="high-score-display">0</strong>
             </div>
 
-
-            <div class="setting-block speed-block">
-
-                <div class="setting-heading">
-
-                    <span class="panel-label">
-                        Speed
-                    </span>
-
-                    <span
-                        id="speed-value"
-                        class="setting-value"
-                    >
-                        1
-                    </span>
-
+            <div class="speed-group">
+                <div class="speed-heading">
+                    <span class="panel-label">Speed</span>
+                    <span id="speed-value">1</span>
                 </div>
 
                 <input
                     id="speed-slider"
                     type="range"
                     min="0"
-                    max="4"
+                    max="5"
                     step="1"
                     value="1"
                     aria-label="Game speed"
                 >
-
             </div>
 
+            <div class="sound-group">
+                <span class="panel-label">Sound</span>
 
-            <div class="setting-block sound-block">
-
-                <span class="panel-label">
-                    Sound
-                </span>
-
-                <label class="switch">
-
-                    <input
-                        id="sound-toggle"
-                        type="checkbox"
-                        checked
-                    >
-
-                    <span class="switch-track">
-                        <span class="switch-thumb"></span>
+                <button
+                    id="sound-toggle"
+                    class="toggle-button active"
+                    type="button"
+                    aria-pressed="true"
+                >
+                    <span class="toggle-track">
+                        <span class="toggle-thumb"></span>
                     </span>
-
-                </label>
-
+                    <span id="sound-label">On</span>
+                </button>
             </div>
 
-        </section>
+        </div>
+    </section>
 
-    </main>
+</main>
 
-    <script src="script.js"></script>
+<script src="script.js"></script>
 
 </body>
 </html>
