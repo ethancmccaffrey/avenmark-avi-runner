@@ -6,1058 +6,320 @@
 (() => {
     "use strict";
 
-    /* ======================================================
+    /* ==========================================================
        ELEMENTS
-    ====================================================== */
+    ========================================================== */
 
-    const canvas = document.getElementById("gameCanvas");
+    const canvas = document.getElementById("game-canvas");
     const ctx = canvas ? canvas.getContext("2d") : null;
 
+    const startScreen = document.getElementById("start-screen");
+    const gameOverScreen = document.getElementById("game-over-screen");
+
+    const startButton = document.getElementById("start-button");
+    const restartButton = document.getElementById("restart-button");
+
+    const pauseButton = document.getElementById("pause-button");
+    const resetButton = document.getElementById("reset-button");
+
+    const scoreElement = document.getElementById("score");
+    const highScoreElement = document.getElementById("high-score");
+
+    const gameOverScoreElement = document.getElementById("game-over-score");
+    const gameOverHighScoreElement =
+        document.getElementById("game-over-high-score");
+
+    const speedSlider = document.getElementById("speed-slider");
+    const speedValue = document.getElementById("speed-value");
+
+    const soundToggle = document.getElementById("sound-toggle");
+
     if (!canvas || !ctx) {
-        console.error("Avenmark Avi Runner: game canvas not found.");
+        console.error("Avenmark Avi Runner: game canvas was not found.");
         return;
     }
 
-    const scoreElement =
-        document.getElementById("score") ||
-        document.getElementById("current-score");
+    /* ==========================================================
+       CANVAS
+    ========================================================== */
 
-    const highScoreElement =
-        document.getElementById("highScore") ||
-        document.getElementById("high-score");
+    let width = 0;
+    let height = 0;
+    let groundY = 0;
+    let dpr = 1;
 
-    const speedSlider =
-        document.getElementById("speedSlider") ||
-        document.getElementById("speed-slider");
+    function resizeCanvas() {
+        const rect = canvas.getBoundingClientRect();
 
-    const soundToggle =
-        document.getElementById("soundToggle") ||
-        document.getElementById("sound-toggle");
+        width = Math.max(320, rect.width);
+        height = Math.max(220, rect.height);
 
-    const pauseButton =
-        document.getElementById("pauseButton") ||
-        document.getElementById("pause-button");
+        dpr = Math.min(window.devicePixelRatio || 1, 2);
 
-    const resetButton =
-        document.getElementById("resetButton") ||
-        document.getElementById("reset-button");
+        canvas.width = Math.floor(width * dpr);
+        canvas.height = Math.floor(height * dpr);
 
-    const startScreen = document.getElementById("startScreen");
-    const gameOverScreen = document.getElementById("gameOverScreen");
+        ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
 
-    const startButton =
-        document.getElementById("startButton") ||
-        document.getElementById("start-button");
+        groundY = height * 0.79;
 
-    const restartButton =
-        document.getElementById("restartButton") ||
-        document.getElementById("restart-button");
+        if (!game.running) {
+            draw();
+        }
+    }
 
-    const gameOverScore =
-        document.getElementById("gameOverScore") ||
-        document.getElementById("game-over-score");
+    window.addEventListener("resize", resizeCanvas);
 
+    /* ==========================================================
+       AVENMARK COLORS
+    ========================================================== */
 
-    /* ======================================================
-       AVENMARK DESIGN TOKENS
-    ====================================================== */
-
-    const AVENMARK = {
+    const COLORS = {
         background: "#F5F5F2",
         dark: "#2F2F2F",
         blue: "#103159",
         copper: "#C47A45",
         white: "#F5F5F2",
-        muted: "#777777",
-        line: "rgba(47, 47, 47, 0.10)"
+        muted: "#8B8B86",
+        soft: "#DCDCD5"
     };
 
+    /* ==========================================================
+       GAME STATE
+    ========================================================== */
 
-    /* ======================================================
-       GAME SETTINGS
-    ====================================================== */
+    const game = {
+        running: false,
+        paused: false,
+        gameOver: false,
 
-    const WORLD = {
-        gravity: 0.72,
-        jumpPower: -13.4,
-        baseSpeed: 6.2,
-        maxSpeedMultiplier: 1.45,
-        minSpeedMultiplier: 0.88,
-        groundHeight: 76,
-        startingDistance: 520
+        score: 0,
+        highScore: Number(localStorage.getItem("avenmarkAviHighScore")) || 0,
+
+        distance: 0,
+
+        baseSpeed: 6,
+        speedMultiplier: 1,
+
+        lastTime: 0,
+        animationFrame: null,
+
+        nextObstacle: 900,
+
+        nextMessage: 500,
+
+        message: "",
+        messageTimer: 0,
+
+        stars: [],
+        debris: []
     };
 
-    let speedMultiplier = 1;
-    let gameSpeed = WORLD.baseSpeed;
-
-    let running = false;
-    let paused = false;
-    let gameOver = false;
-
-    let score = 0;
-    let highScore = Number(
-        localStorage.getItem("avenmarkAviHighScore") || 0
-    );
-
-    let lastTime = 0;
-    let scoreAccumulator = 0;
-
-    let nextObstacleDistance = WORLD.startingDistance;
-
-    let animationFrame = null;
-
-    let soundEnabled = true;
-    let audioContext = null;
-
-
-    /* ======================================================
-       CANVAS
-    ====================================================== */
-
-    function resizeCanvas() {
-        const rect = canvas.getBoundingClientRect();
-
-        const dpr = Math.min(window.devicePixelRatio || 1, 2);
-
-        canvas.width = Math.floor(rect.width * dpr);
-        canvas.height = Math.floor(rect.height * dpr);
-
-        ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
-    }
-
-    window.addEventListener("resize", resizeCanvas);
-
-    resizeCanvas();
-
-
-    /* ======================================================
-       HELPERS
-    ====================================================== */
-
-    function width() {
-        return canvas.getBoundingClientRect().width;
-    }
-
-    function height() {
-        return canvas.getBoundingClientRect().height;
-    }
-
-    function groundY() {
-        return height() - WORLD.groundHeight;
-    }
-
-    function random(min, max) {
-        return Math.random() * (max - min) + min;
-    }
-
-    function clamp(value, min, max) {
-        return Math.max(min, Math.min(max, value));
-    }
-
-
-    /* ======================================================
-       AUDIO
-       Original tiny synthesized Avenmark sound set.
-    ====================================================== */
-
-    function initializeAudio() {
-        if (audioContext) return;
-
-        const AudioContext =
-            window.AudioContext ||
-            window.webkitAudioContext;
-
-        if (!AudioContext) return;
-
-        audioContext = new AudioContext();
-    }
-
-    function playTone(
-        frequency,
-        duration = 0.08,
-        type = "sine",
-        volume = 0.025
-    ) {
-        if (!soundEnabled) return;
-
-        initializeAudio();
-
-        if (!audioContext) return;
-
-        if (audioContext.state === "suspended") {
-            audioContext.resume();
-        }
-
-        const oscillator = audioContext.createOscillator();
-        const gain = audioContext.createGain();
-
-        oscillator.type = type;
-        oscillator.frequency.setValueAtTime(
-            frequency,
-            audioContext.currentTime
-        );
-
-        gain.gain.setValueAtTime(
-            volume,
-            audioContext.currentTime
-        );
-
-        gain.gain.exponentialRampToValueAtTime(
-            0.0001,
-            audioContext.currentTime + duration
-        );
-
-        oscillator.connect(gain);
-        gain.connect(audioContext.destination);
-
-        oscillator.start();
-        oscillator.stop(
-            audioContext.currentTime + duration
-        );
-    }
-
-    function playJumpSound() {
-        playTone(520, 0.07, "sine", 0.022);
-
-        setTimeout(() => {
-            playTone(690, 0.08, "sine", 0.018);
-        }, 30);
-    }
-
-    function playScoreSound() {
-        playTone(740, 0.06, "triangle", 0.018);
-        setTimeout(() => {
-            playTone(920, 0.08, "triangle", 0.014);
-        }, 45);
-    }
-
-    function playGameOverSound() {
-        playTone(300, 0.13, "sine", 0.025);
-
-        setTimeout(() => {
-            playTone(220, 0.18, "sine", 0.018);
-        }, 100);
-    }
-
-
-    /* ======================================================
+    /* ==========================================================
        AVI
-    ====================================================== */
+    ========================================================== */
 
     const avi = {
-        x: 90,
+        x: 110,
         y: 0,
+
         width: 48,
-        height: 66,
+        height: 70,
 
         velocityY: 0,
 
+        gravity: 0.72,
+        jumpStrength: -14.2,
+
         grounded: true,
 
-        runCycle: 0,
+        runFrame: 0,
+        runTimer: 0,
 
         reset() {
-            this.x = Math.max(45, width() * 0.11);
-            this.y = groundY() - this.height;
+            this.x = Math.max(55, width * 0.12);
+            this.y = groundY - this.height;
+
             this.velocityY = 0;
             this.grounded = true;
-            this.runCycle = 0;
+
+            this.runFrame = 0;
+            this.runTimer = 0;
         },
 
         jump() {
-            if (!running || paused || gameOver) return;
+            if (!game.running || game.paused || game.gameOver) {
+                return;
+            }
 
-            if (!this.grounded) return;
+            if (!this.grounded) {
+                return;
+            }
 
-            this.velocityY = WORLD.jumpPower;
+            this.velocityY = this.jumpStrength;
             this.grounded = false;
 
-            playJumpSound();
+            playSound("jump");
         },
 
-        update(delta) {
-            this.velocityY += WORLD.gravity * delta;
+        update(dt) {
+            if (!game.running || game.paused || game.gameOver) {
+                return;
+            }
 
-            this.y += this.velocityY * delta;
+            this.velocityY += this.gravity * dt;
+            this.y += this.velocityY * dt;
 
-            const floor = groundY() - this.height;
+            const floor = groundY - this.height;
 
             if (this.y >= floor) {
                 this.y = floor;
                 this.velocityY = 0;
+
+                if (!this.grounded) {
+                    playSound("land");
+                }
+
                 this.grounded = true;
             }
 
             if (this.grounded) {
-                this.runCycle += delta * gameSpeed * 0.11;
-            }
-        },
-
-        draw() {
-            const x = this.x;
-            const y = this.y;
-
-            const runningOffset =
-                this.grounded
-                    ? Math.sin(this.runCycle) * 1.5
-                    : 0;
-
-            ctx.save();
-
-            /*
-             * Backpack
-             */
-
-            ctx.fillStyle = AVENMARK.dark;
-
-            roundRect(
-                ctx,
-                x + 3,
-                y + 22,
-                11,
-                30,
-                5
-            );
-
-            ctx.fill();
-
-            /*
-             * Helmet
-             */
-
-            ctx.beginPath();
-
-            ctx.arc(
-                x + 25,
-                y + 17,
-                16,
-                0,
-                Math.PI * 2
-            );
-
-            ctx.fillStyle = AVENMARK.dark;
-            ctx.fill();
-
-            /*
-             * Helmet glass
-             */
-
-            ctx.beginPath();
-
-            ctx.arc(
-                x + 25,
-                y + 17,
-                11,
-                0,
-                Math.PI * 2
-            );
-
-            ctx.fillStyle = AVENMARK.background;
-            ctx.fill();
-
-            /*
-             * Small blue reflection
-             */
-
-            ctx.beginPath();
-
-            ctx.arc(
-                x + 22,
-                y + 13,
-                5,
-                0,
-                Math.PI * 2
-            );
-
-            ctx.fillStyle = AVENMARK.blue;
-            ctx.globalAlpha = 0.9;
-            ctx.fill();
-
-            ctx.globalAlpha = 1;
-
-            /*
-             * Body
-             */
-
-            ctx.fillStyle = AVENMARK.dark;
-
-            roundRect(
-                ctx,
-                x + 13,
-                y + 29,
-                27,
-                25,
-                8
-            );
-
-            ctx.fill();
-
-            /*
-             * Copper Avenmark detail
-             */
-
-            ctx.fillStyle = AVENMARK.copper;
-
-            roundRect(
-                ctx,
-                x + 20,
-                y + 34,
-                13,
-                7,
-                2
-            );
-
-            ctx.fill();
-
-            /*
-             * Laptop held in front.
-             */
-
-            const laptopX = x + 31;
-            const laptopY = y + 35;
-
-            ctx.fillStyle = AVENMARK.blue;
-
-            roundRect(
-                ctx,
-                laptopX,
-                laptopY,
-                20,
-                14,
-                3
-            );
-
-            ctx.fill();
-
-            ctx.fillStyle = AVENMARK.background;
-
-            roundRect(
-                ctx,
-                laptopX + 3,
-                laptopY + 3,
-                14,
-                8,
-                1.5
-            );
-
-            ctx.fill();
-
-            /*
-             * Laptop copper mark.
-             */
-
-            ctx.fillStyle = AVENMARK.copper;
-
-            ctx.fillRect(
-                laptopX + 8,
-                laptopY + 6,
-                4,
-                2
-            );
-
-            /*
-             * Legs
-             */
-
-            const legOffset =
-                this.grounded
-                    ? Math.sin(this.runCycle) * 4
-                    : 0;
-
-            ctx.strokeStyle = AVENMARK.dark;
-            ctx.lineWidth = 7;
-            ctx.lineCap = "round";
-
-            ctx.beginPath();
-
-            ctx.moveTo(
-                x + 20,
-                y + 51
-            );
-
-            ctx.lineTo(
-                x + 17 - legOffset,
-                y + 64
-            );
-
-            ctx.stroke();
-
-            ctx.beginPath();
-
-            ctx.moveTo(
-                x + 34,
-                y + 51
-            );
-
-            ctx.lineTo(
-                x + 37 + legOffset,
-                y + 64
-            );
-
-            ctx.stroke();
-
-            /*
-             * Boots
-             */
-
-            ctx.lineWidth = 6;
-
-            ctx.beginPath();
-
-            ctx.moveTo(
-                x + 14 - legOffset,
-                y + 64
-            );
-
-            ctx.lineTo(
-                x + 21 - legOffset,
-                y + 64
-            );
-
-            ctx.stroke();
-
-            ctx.beginPath();
-
-            ctx.moveTo(
-                x + 34 + legOffset,
-                y + 64
-            );
-
-            ctx.lineTo(
-                x + 41 + legOffset,
-                y + 64
-            );
-
-            ctx.stroke();
-
-            ctx.restore();
-        }
-    };
-
-
-    /* ======================================================
-       TERRAIN
-    ====================================================== */
-
-    const terrain = {
-        craters: [],
-        debris: [],
-
-        reset() {
-            this.craters = [];
-            this.debris = [];
-
-            let x = 100;
-
-            while (x < width() + 500) {
-                x += random(160, 300);
-
-                this.craters.push({
-                    x,
-                    width: random(24, 58),
-                    depth: random(4, 10)
-                });
-            }
-
-            x = 180;
-
-            while (x < width() + 700) {
-                x += random(230, 430);
-
-                this.debris.push({
-                    x,
-                    size: random(2, 5),
-                    rotation: random(0, Math.PI),
-                    type: Math.random() > 0.5 ? 1 : 2
-                });
-            }
-        },
-
-        update(delta) {
-            const movement =
-                gameSpeed * delta;
-
-            for (const crater of this.craters) {
-                crater.x -= movement;
-            }
-
-            for (const piece of this.debris) {
-                piece.x -= movement;
-            }
-
-            this.craters = this.craters.filter(
-                crater => crater.x + crater.width > -100
-            );
-
-            this.debris = this.debris.filter(
-                piece => piece.x > -100
-            );
-
-            let furthestCrater =
-                this.craters.reduce(
-                    (max, crater) =>
-                        Math.max(max, crater.x),
-                    width()
-                );
-
-            while (furthestCrater < width() + 300) {
-                const newCrater = {
-                    x: furthestCrater + random(170, 300),
-                    width: random(24, 58),
-                    depth: random(4, 10)
-                };
-
-                this.craters.push(newCrater);
-
-                furthestCrater =
-                    newCrater.x;
-            }
-
-            let furthestDebris =
-                this.debris.reduce(
-                    (max, piece) =>
-                        Math.max(max, piece.x),
-                    width()
-                );
-
-            while (furthestDebris < width() + 600) {
-                const newPiece = {
-                    x: furthestDebris + random(260, 450),
-                    size: random(2, 5),
-                    rotation: random(0, Math.PI),
-                    type: Math.random() > 0.5 ? 1 : 2
-                };
-
-                this.debris.push(newPiece);
-
-                furthestDebris =
-                    newPiece.x;
-            }
-        },
-
-        draw() {
-            const y = groundY();
-
-            /*
-             * Terrain line
-             */
-
-            ctx.strokeStyle =
-                "rgba(47,47,47,0.22)";
-
-            ctx.lineWidth = 1;
-
-            ctx.beginPath();
-
-            ctx.moveTo(0, y);
-            ctx.lineTo(width(), y);
-
-            ctx.stroke();
-
-            /*
-             * Subtle ground texture
-             */
-
-            ctx.strokeStyle =
-                "rgba(47,47,47,0.07)";
-
-            for (const crater of this.craters) {
-                ctx.beginPath();
-
-                ctx.ellipse(
-                    crater.x + crater.width / 2,
-                    y + 2,
-                    crater.width / 2,
-                    crater.depth,
-                    0,
-                    0,
-                    Math.PI
-                );
-
-                ctx.stroke();
-            }
-
-            /*
-             * Small debris
-             */
-
-            for (const piece of this.debris) {
-                ctx.save();
-
-                ctx.translate(
-                    piece.x,
-                    y - 5
-                );
-
-                ctx.rotate(piece.rotation);
-
-                ctx.fillStyle =
-                    "rgba(47,47,47,0.20)";
-
-                if (piece.type === 1) {
-                    ctx.fillRect(
-                        -piece.size,
-                        -piece.size,
-                        piece.size * 2,
-                        piece.size
-                    );
-                } else {
-                    ctx.beginPath();
-
-                    ctx.arc(
-                        0,
-                        0,
-                        piece.size,
-                        0,
-                        Math.PI * 2
-                    );
-
-                    ctx.fill();
+                this.runTimer += dt;
+
+                if (this.runTimer > 7) {
+                    this.runTimer = 0;
+                    this.runFrame = this.runFrame ? 0 : 1;
                 }
-
-                ctx.restore();
             }
         }
     };
 
+    /* ==========================================================
+       OBSTACLES
+    ========================================================== */
 
-    /* ======================================================
-       UFO OBSTACLES
-    ====================================================== */
+    const obstacles = [];
 
-    const ufos = [];
+    function createCraters() {
+        const crater = {
+            type: "crater",
+
+            x: width + 100,
+
+            width: 58 + Math.random() * 38,
+            height: 16 + Math.random() * 7,
+
+            passed: false
+        };
+
+        crater.y = groundY - crater.height + 2;
+
+        obstacles.push(crater);
+    }
 
     function createUFO() {
-        const altitude =
-            groundY() -
-            random(72, 120);
+        const ufo = {
+            type: "ufo",
 
-        ufos.push({
-            x: width() + random(30, 100),
-            y: altitude,
-            width: 54,
-            height: 25,
-            speedOffset: random(0.96, 1.04),
-            bob: random(0, Math.PI * 2)
-        });
+            x: width + 100,
+
+            width: 62,
+            height: 30,
+
+            y:
+                groundY -
+                85 -
+                Math.random() * 70,
+
+            passed: false,
+
+            bob: Math.random() * Math.PI * 2
+        };
+
+        obstacles.push(ufo);
     }
 
-    function updateUFOs(delta) {
-        for (const ufo of ufos) {
-            ufo.x -=
-                gameSpeed *
-                delta *
-                ufo.speedOffset;
+    function spawnObstacle() {
+        const canFly = game.score > 180;
 
-            ufo.bob += delta * 0.06;
-
-            ufo.y +=
-                Math.sin(ufo.bob) * 0.15;
+        if (canFly && Math.random() < 0.27) {
+            createUFO();
+        } else {
+            createCraters();
         }
 
-        while (
-            ufos.length &&
-            ufos[0].x + ufos[0].width < -100
-        ) {
-            ufos.shift();
+        const speedFactor = Math.min(game.score / 1200, 1);
+
+        game.nextObstacle =
+            720 +
+            Math.random() * 580 -
+            speedFactor * 170;
+    }
+
+    function updateObstacles(dt) {
+        if (!game.running || game.paused || game.gameOver) {
+            return;
         }
-    }
 
-    function drawUFO(ufo) {
-        const x = ufo.x;
-        const y = ufo.y;
+        const speed = game.baseSpeed * game.speedMultiplier;
 
-        ctx.save();
+        game.nextObstacle -= speed * dt;
 
-        /*
-         * UFO body
-         */
-
-        ctx.fillStyle = AVENMARK.dark;
-
-        ctx.beginPath();
-
-        ctx.ellipse(
-            x + ufo.width / 2,
-            y + 15,
-            ufo.width / 2,
-            10,
-            0,
-            0,
-            Math.PI * 2
-        );
-
-        ctx.fill();
-
-        /*
-         * UFO dome
-         */
-
-        ctx.fillStyle = AVENMARK.background;
-
-        ctx.beginPath();
-
-        ctx.ellipse(
-            x + ufo.width / 2,
-            y + 10,
-            14,
-            9,
-            0,
-            Math.PI,
-            Math.PI * 2
-        );
-
-        ctx.fill();
-
-        /*
-         * Copper light
-         */
-
-        ctx.fillStyle = AVENMARK.copper;
-
-        ctx.beginPath();
-
-        ctx.arc(
-            x + ufo.width / 2,
-            y + 17,
-            3,
-            0,
-            Math.PI * 2
-        );
-
-        ctx.fill();
-
-        /*
-         * Tiny side lights
-         */
-
-        ctx.fillStyle = AVENMARK.copper;
-
-        ctx.beginPath();
-
-        ctx.arc(
-            x + 13,
-            y + 15,
-            2,
-            0,
-            Math.PI * 2
-        );
-
-        ctx.arc(
-            x + ufo.width - 13,
-            y + 15,
-            2,
-            0,
-            Math.PI * 2
-        );
-
-        ctx.fill();
-
-        ctx.restore();
-    }
-
-
-    /* ======================================================
-       STARS
-    ====================================================== */
-
-    const stars = [];
-
-    function createStars() {
-        stars.length = 0;
-
-        const count =
-            Math.max(
-                20,
-                Math.floor(width() / 42)
-            );
-
-        for (let i = 0; i < count; i++) {
-            stars.push({
-                x: Math.random() * width(),
-                y: Math.random() * Math.max(150, groundY() * 0.72),
-                size: random(0.7, 1.6),
-                alpha: random(0.35, 0.8),
-                speed: random(0.04, 0.12)
-            });
+        if (game.nextObstacle <= 0) {
+            spawnObstacle();
         }
-    }
 
-    function updateStars(delta) {
-        for (const star of stars) {
-            star.x -= star.speed * gameSpeed * delta;
+        for (let i = obstacles.length - 1; i >= 0; i--) {
+            const obstacle = obstacles[i];
 
-            if (star.x < -5) {
-                star.x = width() + 5;
-                star.y =
-                    Math.random() *
-                    Math.max(150, groundY() * 0.72);
+            obstacle.x -= speed * dt;
+
+            if (obstacle.type === "ufo") {
+                obstacle.bob += 0.035 * dt;
+                obstacle.y += Math.sin(obstacle.bob) * 0.18;
+            }
+
+            if (
+                !obstacle.passed &&
+                obstacle.x + obstacle.width < avi.x
+            ) {
+                obstacle.passed = true;
+            }
+
+            if (obstacle.x + obstacle.width < -100) {
+                obstacles.splice(i, 1);
             }
         }
     }
 
-    function drawStars() {
-        for (const star of stars) {
-            ctx.globalAlpha = star.alpha;
-
-            ctx.fillStyle = AVENMARK.copper;
-
-            ctx.beginPath();
-
-            ctx.arc(
-                star.x,
-                star.y,
-                star.size,
-                0,
-                Math.PI * 2
-            );
-
-            ctx.fill();
-        }
-
-        ctx.globalAlpha = 1;
-    }
-
-
-    /* ======================================================
-       500 POINT MESSAGE
-    ====================================================== */
-
-    let lastMilestone = 0;
-    let milestoneMessage = "";
-    let milestoneTimer = 0;
-
-    function checkMilestone() {
-        const milestone =
-            Math.floor(score / 500) * 500;
-
-        if (
-            milestone >= 500 &&
-            milestone > lastMilestone
-        ) {
-            lastMilestone = milestone;
-
-            milestoneMessage =
-                "Continue plz :)";
-
-            milestoneTimer = 180;
-
-            playScoreSound();
-        }
-    }
-
-    function drawMilestone() {
-        if (milestoneTimer <= 0) return;
-
-        milestoneTimer--;
-
-        const fade =
-            milestoneTimer < 35
-                ? milestoneTimer / 35
-                : 1;
-
-        ctx.save();
-
-        ctx.globalAlpha = fade;
-
-        ctx.font =
-            '600 15px "Montserrat", sans-serif';
-
-        ctx.textAlign = "center";
-
-        ctx.fillStyle = AVENMARK.copper;
-
-        ctx.fillText(
-            milestoneMessage,
-            width() / 2,
-            48
-        );
-
-        ctx.restore();
-    }
-
-
-    /* ======================================================
-       BACKGROUND
-    ====================================================== */
-
-    function drawBackground() {
-        ctx.fillStyle = AVENMARK.background;
-
-        ctx.fillRect(
-            0,
-            0,
-            width(),
-            height()
-        );
-
-        drawStars();
-    }
-
-
-    /* ======================================================
-       SCORE
-    ====================================================== */
-
-    function updateScore(delta) {
-        scoreAccumulator += delta;
-
-        /*
-         * Score rises steadily rather than being
-         * tied to frame rate.
-         */
-
-        if (scoreAccumulator >= 1) {
-            const points =
-                Math.floor(scoreAccumulator);
-
-            score += points;
-
-            scoreAccumulator -= points;
-
-            checkMilestone();
-
-            updateScoreDisplay();
-        }
-    }
-
-    function updateScoreDisplay() {
-        if (scoreElement) {
-            scoreElement.textContent =
-                String(score).padStart(5, "0");
-        }
-
-        if (highScoreElement) {
-            highScoreElement.textContent =
-                String(highScore).padStart(5, "0");
-        }
-
-        if (gameOverScore) {
-            gameOverScore.textContent =
-                String(score).padStart(5, "0");
-        }
-    }
-
-
-    /* ======================================================
+    /* ==========================================================
        COLLISION
-    ====================================================== */
+    ========================================================== */
 
     function getAviHitbox() {
         return {
             x: avi.x + 9,
-            y: avi.y + 5,
-            width: 37,
-            height: 59
+            y: avi.y + 7,
+            width: avi.width - 18,
+            height: avi.height - 10
         };
     }
 
-    function getUFOHitbox(ufo) {
+    function getObstacleHitbox(obstacle) {
+        if (obstacle.type === "crater") {
+            return {
+                x: obstacle.x + 6,
+                y: obstacle.y + 3,
+                width: obstacle.width - 12,
+                height: obstacle.height - 2
+            };
+        }
+
         return {
-            x: ufo.x + 5,
-            y: ufo.y + 4,
-            width: ufo.width - 10,
-            height: 20
+            x: obstacle.x + 8,
+            y: obstacle.y + 5,
+            width: obstacle.width - 16,
+            height: obstacle.height - 8
         };
     }
 
@@ -1071,465 +333,1241 @@
     }
 
     function checkCollisions() {
-        const aviBox =
-            getAviHitbox();
+        if (!game.running || game.gameOver) {
+            return;
+        }
 
-        for (const ufo of ufos) {
-            if (
-                intersects(
-                    aviBox,
-                    getUFOHitbox(ufo)
-                )
-            ) {
+        const aviBox = getAviHitbox();
+
+        for (const obstacle of obstacles) {
+            if (intersects(aviBox, getObstacleHitbox(obstacle))) {
                 endGame();
                 return;
             }
         }
     }
 
+    /* ==========================================================
+       SCORE
+    ========================================================== */
 
-    /* ======================================================
-       OBSTACLE SPAWNING
-    ====================================================== */
-
-    function updateObstacleSpawner(delta) {
-        nextObstacleDistance -=
-            gameSpeed * delta;
-
-        if (nextObstacleDistance <= 0) {
-            createUFO();
-
-            /*
-             * Keep UFOs comfortably spaced.
-             * Difficulty increases gradually through speed,
-             * not by filling the screen.
-             */
-
-            const difficulty =
-                clamp(score / 5000, 0, 1);
-
-            nextObstacleDistance =
-                random(
-                    470 - difficulty * 60,
-                    720 - difficulty * 80
-                );
-        }
-    }
-
-
-    /* ======================================================
-       GAME STATE
-    ====================================================== */
-
-    function startGame() {
-        initializeAudio();
-
-        if (
-            audioContext &&
-            audioContext.state === "suspended"
-        ) {
-            audioContext.resume();
+    function updateScore(dt) {
+        if (!game.running || game.paused || game.gameOver) {
+            return;
         }
 
-        running = true;
-        paused = false;
-        gameOver = false;
+        game.distance += game.baseSpeed * game.speedMultiplier * dt;
 
-        if (startScreen) {
-            startScreen.classList.add("hidden");
-        }
+        game.score = Math.floor(game.distance / 10);
 
-        if (gameOverScreen) {
-            gameOverScreen.classList.add("hidden");
-        }
-
-        resetGameState();
-
-        if (!animationFrame) {
-            lastTime = performance.now();
-
-            animationFrame =
-                requestAnimationFrame(loop);
-        }
-    }
-
-    function resetGameState() {
-        score = 0;
-        scoreAccumulator = 0;
-
-        lastMilestone = 0;
-        milestoneMessage = "";
-        milestoneTimer = 0;
-
-        nextObstacleDistance =
-            WORLD.startingDistance;
-
-        ufos.length = 0;
-
-        gameSpeed =
-            WORLD.baseSpeed *
-            speedMultiplier;
-
-        avi.reset();
-
-        terrain.reset();
-
-        createStars();
-
-        updateScoreDisplay();
-    }
-
-    function resetGame() {
-        running = true;
-        paused = false;
-        gameOver = false;
-
-        if (startScreen) {
-            startScreen.classList.add("hidden");
-        }
-
-        if (gameOverScreen) {
-            gameOverScreen.classList.add("hidden");
-        }
-
-        resetGameState();
-
-        playTone(
-            440,
-            0.06,
-            "sine",
-            0.014
-        );
-    }
-
-    function endGame() {
-        running = false;
-        paused = false;
-        gameOver = true;
-
-        if (score > highScore) {
-            highScore = score;
+        if (game.score > game.highScore) {
+            game.highScore = game.score;
 
             localStorage.setItem(
                 "avenmarkAviHighScore",
-                String(highScore)
+                String(game.highScore)
             );
         }
 
-        updateScoreDisplay();
-
-        if (gameOverScreen) {
-            gameOverScreen.classList.remove("hidden");
+        if (game.score >= game.nextMessage) {
+            showAvenmarkMessage(game.nextMessage);
+            game.nextMessage += 500;
         }
 
-        playGameOverSound();
+        updateScoreUI();
     }
 
-    function togglePause() {
-        if (!running && !paused) return;
+    function updateScoreUI() {
+        if (scoreElement) {
+            scoreElement.textContent = String(game.score).padStart(5, "0");
+        }
 
-        paused = !paused;
-
-        if (pauseButton) {
-            pauseButton.textContent =
-                paused ? "Resume" : "Pause";
+        if (highScoreElement) {
+            highScoreElement.textContent =
+                String(game.highScore).padStart(5, "0");
         }
     }
 
+    function showAvenmarkMessage(points) {
+        game.message = `Continue plz :)`;
+        game.messageTimer = 150;
 
-    /* ======================================================
-       GAME UPDATE
-    ====================================================== */
+        playSound("message");
 
-    function update(delta) {
-        if (!running || paused || gameOver) {
+        /*
+         * The score milestone itself is enough context.
+         * The message floats quietly in the sky instead of
+         * becoming a giant game announcement.
+         */
+        void points;
+    }
+
+    /* ==========================================================
+       SPEED
+    ========================================================== */
+
+    function readSpeed() {
+        if (!speedSlider) {
             return;
         }
 
-        gameSpeed =
-            WORLD.baseSpeed *
-            speedMultiplier;
+        let value = Number(speedSlider.value);
 
-        updateScore(delta);
-
-        avi.update(delta);
-
-        terrain.update(delta);
-
-        updateStars(delta);
-
-        updateUFOs(delta);
-
-        updateObstacleSpawner(delta);
-
-        checkCollisions();
-    }
-
-
-    /* ======================================================
-       DRAW
-    ====================================================== */
-
-    function draw() {
-        drawBackground();
-
-        terrain.draw();
-
-        for (const ufo of ufos) {
-            drawUFO(ufo);
+        if (!Number.isFinite(value)) {
+            value = 1;
         }
-
-        avi.draw();
-
-        drawMilestone();
-    }
-
-
-    /* ======================================================
-       MAIN LOOP
-    ====================================================== */
-
-    function loop(timestamp) {
-        animationFrame = null;
-
-        let delta =
-            (timestamp - lastTime) / 16.6667;
-
-        lastTime = timestamp;
 
         /*
-         * Prevent a giant physics jump after the
-         * browser tab has been backgrounded.
+         * 0 = slightly slower
+         * 1 = normal
+         * 2+ = increasingly faster
          */
 
-        delta = clamp(delta, 0, 2);
-
-        update(delta);
-
-        draw();
-
-        animationFrame =
-            requestAnimationFrame(loop);
-    }
-
-
-    /* ======================================================
-       INPUT
-    ====================================================== */
-
-    function handleJump(event) {
-        /*
-         * Do not hijack buttons or sliders.
-         */
-
-        if (
-            event.target &&
-            (
-                event.target.tagName === "BUTTON" ||
-                event.target.tagName === "INPUT"
-            )
-        ) {
-            return;
+        if (value === 0) {
+            game.speedMultiplier = 0.82;
+        } else {
+            game.speedMultiplier = value;
         }
 
-        if (
-            event.code === "Space" ||
-            event.code === "ArrowUp" ||
-            event.type === "pointerdown"
-        ) {
-            event.preventDefault();
-
-            if (!running && !gameOver) {
-                startGame();
-                return;
-            }
-
-            if (gameOver) {
-                resetGame();
-                return;
-            }
-
-            avi.jump();
+        if (speedValue) {
+            speedValue.textContent = String(value);
         }
     }
-
-    document.addEventListener(
-        "keydown",
-        handleJump
-    );
-
-    canvas.addEventListener(
-        "pointerdown",
-        handleJump
-    );
-
-
-    /* ======================================================
-       PAUSE
-    ====================================================== */
-
-    if (pauseButton) {
-        pauseButton.addEventListener(
-            "click",
-            () => {
-                togglePause();
-            }
-        );
-    }
-
-
-    /* ======================================================
-       RESET
-    ====================================================== */
-
-    if (resetButton) {
-        resetButton.addEventListener(
-            "click",
-            () => {
-                resetGame();
-            }
-        );
-    }
-
-
-    /* ======================================================
-       START
-    ====================================================== */
-
-    if (startButton) {
-        startButton.addEventListener(
-            "click",
-            () => {
-                startGame();
-            }
-        );
-    }
-
-
-    /* ======================================================
-       RESTART
-    ====================================================== */
-
-    if (restartButton) {
-        restartButton.addEventListener(
-            "click",
-            () => {
-                resetGame();
-            }
-        );
-    }
-
-
-    /* ======================================================
-       SPEED SLIDER
-    ====================================================== */
 
     if (speedSlider) {
+        speedSlider.min = "0";
+        speedSlider.max = "4";
+
         /*
          * Normal speed is the default.
-         * Only a modest amount of slowdown is allowed.
          */
-
         speedSlider.value = "1";
 
-        speedSlider.addEventListener(
-            "input",
-            () => {
-                speedMultiplier =
-                    clamp(
-                        Number(speedSlider.value),
-                        WORLD.minSpeedMultiplier,
-                        WORLD.maxSpeedMultiplier
-                    );
-
-                gameSpeed =
-                    WORLD.baseSpeed *
-                    speedMultiplier;
-            }
-        );
+        speedSlider.addEventListener("input", readSpeed);
     }
 
+    readSpeed();
 
-    /* ======================================================
-       SOUND TOGGLE
-    ====================================================== */
+    /* ==========================================================
+       SOUND
+    ========================================================== */
+
+    let audioContext = null;
+    let soundEnabled = true;
 
     if (soundToggle) {
         soundEnabled =
             soundToggle.checked !== false;
 
-        soundToggle.addEventListener(
-            "change",
-            () => {
-                soundEnabled =
-                    soundToggle.checked;
+        /*
+         * Explicitly start ON.
+         */
+        soundToggle.checked = true;
+
+        soundToggle.addEventListener("change", () => {
+            soundEnabled = soundToggle.checked;
+
+            if (soundEnabled) {
+                playSound("toggle");
             }
-        );
+        });
     }
 
+    function getAudioContext() {
+        if (!audioContext) {
+            const AudioContext =
+                window.AudioContext ||
+                window.webkitAudioContext;
 
-    /* ======================================================
-       MOBILE / TOUCH
-    ====================================================== */
+            if (!AudioContext) {
+                return null;
+            }
 
-    document.addEventListener(
-        "touchstart",
-        event => {
+            audioContext = new AudioContext();
+        }
+
+        if (audioContext.state === "suspended") {
+            audioContext.resume();
+        }
+
+        return audioContext;
+    }
+
+    /*
+     * Original lightweight Avenmark sounds.
+     * No external audio file is required.
+     */
+
+    function playSound(type) {
+        if (!soundEnabled) {
+            return;
+        }
+
+        const audio = getAudioContext();
+
+        if (!audio) {
+            return;
+        }
+
+        const oscillator = audio.createOscillator();
+        const gain = audio.createGain();
+
+        oscillator.connect(gain);
+        gain.connect(audio.destination);
+
+        const now = audio.currentTime;
+
+        let frequency = 440;
+        let duration = 0.08;
+        let wave = "sine";
+
+        if (type === "jump") {
+            frequency = 520;
+            duration = 0.10;
+            wave = "triangle";
+        }
+
+        if (type === "land") {
+            frequency = 180;
+            duration = 0.045;
+            wave = "sine";
+        }
+
+        if (type === "message") {
+            frequency = 660;
+            duration = 0.16;
+            wave = "sine";
+        }
+
+        if (type === "toggle") {
+            frequency = 740;
+            duration = 0.06;
+            wave = "sine";
+        }
+
+        if (type === "gameover") {
+            frequency = 130;
+            duration = 0.24;
+            wave = "triangle";
+        }
+
+        oscillator.type = wave;
+
+        oscillator.frequency.setValueAtTime(
+            frequency,
+            now
+        );
+
+        if (type === "gameover") {
+            oscillator.frequency.exponentialRampToValueAtTime(
+                75,
+                now + duration
+            );
+        }
+
+        gain.gain.setValueAtTime(0.0001, now);
+
+        gain.gain.exponentialRampToValueAtTime(
+            0.045,
+            now + 0.008
+        );
+
+        gain.gain.exponentialRampToValueAtTime(
+            0.0001,
+            now + duration
+        );
+
+        oscillator.start(now);
+        oscillator.stop(now + duration + 0.02);
+    }
+
+    /* ==========================================================
+       STARS
+    ========================================================== */
+
+    function createStars() {
+        game.stars = [];
+
+        const count = Math.max(
+            22,
+            Math.floor(width / 28)
+        );
+
+        for (let i = 0; i < count; i++) {
+            game.stars.push({
+                x: Math.random() * width,
+                y: Math.random() * groundY * 0.72,
+
+                size:
+                    Math.random() > 0.85
+                        ? 2
+                        : 1,
+
+                speed:
+                    0.08 +
+                    Math.random() * 0.24
+            });
+        }
+    }
+
+    function updateStars(dt) {
+        if (!game.running || game.paused) {
+            return;
+        }
+
+        const movement =
+            game.baseSpeed *
+            game.speedMultiplier;
+
+        for (const star of game.stars) {
+            star.x -= movement * star.speed * dt;
+
+            if (star.x < -5) {
+                star.x = width + 5;
+                star.y = Math.random() * groundY * 0.72;
+            }
+        }
+    }
+
+    /* ==========================================================
+       SPACE DEBRIS
+    ========================================================== */
+
+    function createDebris() {
+        game.debris = [];
+
+        /*
+         * Deliberately sparse.
+         * The sky should feel quiet rather than crowded.
+         */
+
+        const count = Math.max(
+            4,
+            Math.floor(width / 210)
+        );
+
+        for (let i = 0; i < count; i++) {
+            game.debris.push({
+                x: Math.random() * width,
+                y:
+                    60 +
+                    Math.random() *
+                        (groundY * 0.48),
+
+                size:
+                    2 +
+                    Math.random() * 2,
+
+                speed:
+                    0.04 +
+                    Math.random() * 0.08
+            });
+        }
+    }
+
+    function updateDebris(dt) {
+        if (!game.running || game.paused) {
+            return;
+        }
+
+        const movement =
+            game.baseSpeed *
+            game.speedMultiplier;
+
+        for (const piece of game.debris) {
+            piece.x -= movement * piece.speed * dt;
+
+            if (piece.x < -10) {
+                piece.x =
+                    width +
+                    60 +
+                    Math.random() * 150;
+
+                piece.y =
+                    60 +
+                    Math.random() *
+                        (groundY * 0.48);
+            }
+        }
+    }
+
+    /* ==========================================================
+       DRAW — BACKGROUND
+    ========================================================== */
+
+    function drawBackground() {
+        ctx.fillStyle = COLORS.background;
+        ctx.fillRect(0, 0, width, height);
+
+        /*
+         * The only strong color in the sky is the Avenmark blue.
+         * Stars remain copper.
+         */
+
+        for (const star of game.stars) {
+            ctx.fillStyle = COLORS.copper;
+
+            ctx.beginPath();
+            ctx.arc(
+                star.x,
+                star.y,
+                star.size,
+                0,
+                Math.PI * 2
+            );
+            ctx.fill();
+        }
+
+        for (const piece of game.debris) {
+            ctx.fillStyle = COLORS.blue;
+
+            ctx.beginPath();
+            ctx.arc(
+                piece.x,
+                piece.y,
+                piece.size,
+                0,
+                Math.PI * 2
+            );
+            ctx.fill();
+        }
+    }
+
+    /* ==========================================================
+       DRAW — GROUND
+    ========================================================== */
+
+    function drawGround() {
+        ctx.strokeStyle = COLORS.dark;
+        ctx.lineWidth = 2;
+
+        ctx.beginPath();
+        ctx.moveTo(0, groundY);
+        ctx.lineTo(width, groundY);
+        ctx.stroke();
+
+        /*
+         * Small, restrained terrain marks.
+         * No giant detailed landscape.
+         */
+
+        const offset =
+            (game.distance * 0.75) % 90;
+
+        for (let x = -90 + offset; x < width + 90; x += 90) {
+            ctx.strokeStyle =
+                "rgba(47,47,47,0.16)";
+
+            ctx.lineWidth = 1;
+
+            ctx.beginPath();
+            ctx.moveTo(x, groundY + 5);
+            ctx.lineTo(x + 18, groundY + 5);
+            ctx.stroke();
+        }
+    }
+
+    /* ==========================================================
+       DRAW — AVI
+    ========================================================== */
+
+    function drawAvi() {
+        const x = avi.x;
+        const y = avi.y;
+
+        ctx.save();
+
+        /*
+         * Backpack
+         */
+        ctx.fillStyle = COLORS.blue;
+
+        roundRect(
+            ctx,
+            x - 5,
+            y + 22,
+            13,
+            31,
+            5
+        );
+
+        ctx.fill();
+
+        /*
+         * Helmet outer shell
+         */
+        ctx.fillStyle = COLORS.dark;
+
+        ctx.beginPath();
+        ctx.arc(
+            x + 24,
+            y + 17,
+            17,
+            0,
+            Math.PI * 2
+        );
+        ctx.fill();
+
+        /*
+         * Helmet glass
+         */
+        ctx.fillStyle = COLORS.blue;
+
+        ctx.beginPath();
+        ctx.arc(
+            x + 24,
+            y + 17,
+            11,
+            0,
+            Math.PI * 2
+        );
+        ctx.fill();
+
+        /*
+         * Body
+         */
+        ctx.fillStyle = COLORS.white;
+
+        roundRect(
+            ctx,
+            x + 10,
+            y + 30,
+            29,
+            27,
+            9
+        );
+
+        ctx.fill();
+
+        /*
+         * Avenmark copper chest detail
+         */
+        ctx.fillStyle = COLORS.copper;
+
+        roundRect(
+            ctx,
+            x + 18,
+            y + 37,
+            12,
+            4,
+            2
+        );
+
+        ctx.fill();
+
+        /*
+         * Laptop — intentionally visible in Avi's hands.
+         */
+        drawLaptop(
+            x + 28,
+            y + 47
+        );
+
+        /*
+         * Legs
+         */
+        ctx.strokeStyle = COLORS.dark;
+        ctx.lineWidth = 6;
+        ctx.lineCap = "round";
+
+        const running =
+            avi.grounded &&
+            game.running &&
+            !game.paused;
+
+        const legOffset =
+            running
+                ? avi.runFrame
+                    ? 5
+                    : -5
+                : 0;
+
+        ctx.beginPath();
+        ctx.moveTo(x + 19, y + 55);
+        ctx.lineTo(
+            x + 16 - legOffset,
+            y + 68
+        );
+        ctx.stroke();
+
+        ctx.beginPath();
+        ctx.moveTo(x + 32, y + 55);
+        ctx.lineTo(
+            x + 35 + legOffset,
+            y + 68
+        );
+        ctx.stroke();
+
+        /*
+         * Boots
+         */
+        ctx.lineWidth = 5;
+
+        ctx.beginPath();
+        ctx.moveTo(
+            x + 13 - legOffset,
+            y + 68
+        );
+        ctx.lineTo(
+            x + 21 - legOffset,
+            y + 68
+        );
+        ctx.stroke();
+
+        ctx.beginPath();
+        ctx.moveTo(
+            x + 32 + legOffset,
+            y + 68
+        );
+        ctx.lineTo(
+            x + 40 + legOffset,
+            y + 68
+        );
+        ctx.stroke();
+
+        ctx.restore();
+    }
+
+    function drawLaptop(x, y) {
+        ctx.save();
+
+        /*
+         * Screen
+         */
+        ctx.fillStyle = COLORS.dark;
+
+        roundRect(
+            ctx,
+            x - 5,
+            y - 11,
+            18,
+            12,
+            2
+        );
+
+        ctx.fill();
+
+        ctx.fillStyle = COLORS.copper;
+
+        ctx.fillRect(
+            x - 2,
+            y - 8,
+            12,
+            6
+        );
+
+        /*
+         * Base
+         */
+        ctx.fillStyle = COLORS.dark;
+
+        ctx.beginPath();
+        ctx.moveTo(x - 7, y + 1);
+        ctx.lineTo(x + 15, y + 1);
+        ctx.lineTo(x + 18, y + 4);
+        ctx.lineTo(x - 10, y + 4);
+        ctx.closePath();
+        ctx.fill();
+
+        ctx.restore();
+    }
+
+    /* ==========================================================
+       DRAW — CRATER
+    ========================================================== */
+
+    function drawCrater(obstacle) {
+        ctx.save();
+
+        ctx.fillStyle = COLORS.dark;
+
+        ctx.beginPath();
+
+        ctx.ellipse(
+            obstacle.x + obstacle.width / 2,
+            groundY + 2,
+            obstacle.width / 2,
+            obstacle.height / 2,
+            0,
+            0,
+            Math.PI * 2
+        );
+
+        ctx.fill();
+
+        /*
+         * Small inner highlight keeps it readable
+         * without making it overly detailed.
+         */
+
+        ctx.strokeStyle =
+            "rgba(245,245,242,0.38)";
+
+        ctx.lineWidth = 2;
+
+        ctx.beginPath();
+
+        ctx.arc(
+            obstacle.x + obstacle.width * 0.58,
+            groundY + 1,
+            obstacle.width * 0.18,
+            Math.PI * 1.05,
+            Math.PI * 1.85
+        );
+
+        ctx.stroke();
+
+        ctx.restore();
+    }
+
+    /* ==========================================================
+       DRAW — UFO
+    ========================================================== */
+
+    function drawUFO(obstacle) {
+        const x = obstacle.x;
+        const y = obstacle.y;
+
+        ctx.save();
+
+        /*
+         * UFO silhouette.
+         * Minimal enough to belong beside Chrome-Dino-style
+         * obstacles, but clearly an Avenmark UFO.
+         */
+
+        ctx.fillStyle = COLORS.blue;
+
+        ctx.beginPath();
+
+        ctx.ellipse(
+            x + obstacle.width / 2,
+            y + 16,
+            obstacle.width / 2,
+            10,
+            0,
+            0,
+            Math.PI * 2
+        );
+
+        ctx.fill();
+
+        /*
+         * Dome
+         */
+        ctx.fillStyle = COLORS.dark;
+
+        ctx.beginPath();
+
+        ctx.arc(
+            x + obstacle.width / 2,
+            y + 12,
+            10,
+            Math.PI,
+            0
+        );
+
+        ctx.fill();
+
+        /*
+         * Copper UFO lights
+         */
+        ctx.fillStyle = COLORS.copper;
+
+        const lightY = y + 21;
+
+        for (let i = 0; i < 3; i++) {
+            ctx.beginPath();
+
+            ctx.arc(
+                x + 17 + i * 14,
+                lightY,
+                2,
+                0,
+                Math.PI * 2
+            );
+
+            ctx.fill();
+        }
+
+        ctx.restore();
+    }
+
+    /* ==========================================================
+       DRAW — OBSTACLES
+    ========================================================== */
+
+    function drawObstacles() {
+        for (const obstacle of obstacles) {
+            if (obstacle.type === "crater") {
+                drawCrater(obstacle);
+            } else {
+                drawUFO(obstacle);
+            }
+        }
+    }
+
+    /* ==========================================================
+       DRAW — MILESTONE MESSAGE
+    ========================================================== */
+
+    function drawMessage() {
+        if (
+            !game.message ||
+            game.messageTimer <= 0
+        ) {
+            return;
+        }
+
+        const progress =
+            game.messageTimer < 30
+                ? game.messageTimer / 30
+                : 1;
+
+        ctx.save();
+
+        ctx.globalAlpha =
+            Math.min(1, progress);
+
+        ctx.fillStyle = COLORS.blue;
+
+        ctx.font =
+            '600 14px "Montserrat", sans-serif';
+
+        ctx.textAlign = "center";
+
+        ctx.fillText(
+            game.message,
+            width / 2,
+            height * 0.25
+        );
+
+        ctx.restore();
+    }
+
+    /* ==========================================================
+       DRAW
+    ========================================================== */
+
+    function draw() {
+        drawBackground();
+        drawGround();
+        drawObstacles();
+        drawAvi();
+        drawMessage();
+    }
+
+    /* ==========================================================
+       GAME LOOP
+    ========================================================== */
+
+    function gameLoop(timestamp) {
+        if (!game.lastTime) {
+            game.lastTime = timestamp;
+        }
+
+        let dt =
+            (timestamp - game.lastTime) / 16.6667;
+
+        game.lastTime = timestamp;
+
+        /*
+         * Prevent a browser tab switch or frame hitch
+         * from launching Avi across the screen.
+         */
+        dt = Math.min(dt, 2);
+
+        if (game.messageTimer > 0) {
+            game.messageTimer -= dt;
+        } else {
+            game.message = "";
+        }
+
+        if (
+            game.running &&
+            !game.paused &&
+            !game.gameOver
+        ) {
+            avi.update(dt);
+            updateObstacles(dt);
+            updateStars(dt);
+            updateDebris(dt);
+            updateScore(dt);
+
+            checkCollisions();
+        }
+
+        draw();
+
+        game.animationFrame =
+            requestAnimationFrame(gameLoop);
+    }
+
+    /* ==========================================================
+       START
+    ========================================================== */
+
+    function startGame() {
+        ensureAudio();
+
+        game.running = true;
+        game.paused = false;
+        game.gameOver = false;
+
+        game.score = 0;
+        game.distance = 0;
+
+        game.nextObstacle = 850;
+        game.nextMessage = 500;
+
+        game.message = "";
+        game.messageTimer = 0;
+
+        obstacles.length = 0;
+
+        avi.reset();
+
+        updateScoreUI();
+
+        if (startScreen) {
+            startScreen.classList.remove("visible");
+            startScreen.setAttribute(
+                "aria-hidden",
+                "true"
+            );
+        }
+
+        if (gameOverScreen) {
+            gameOverScreen.classList.remove("visible");
+            gameOverScreen.setAttribute(
+                "aria-hidden",
+                "true"
+            );
+        }
+
+        if (pauseButton) {
+            pauseButton.textContent = "Pause";
+            pauseButton.setAttribute(
+                "aria-label",
+                "Pause game"
+            );
+        }
+
+        game.lastTime = performance.now();
+
+        draw();
+    }
+
+    /* ==========================================================
+       GAME OVER
+    ========================================================== */
+
+    function endGame() {
+        if (game.gameOver) {
+            return;
+        }
+
+        game.gameOver = true;
+        game.running = false;
+
+        playSound("gameover");
+
+        if (gameOverScoreElement) {
+            gameOverScoreElement.textContent =
+                String(game.score).padStart(5, "0");
+        }
+
+        if (gameOverHighScoreElement) {
+            gameOverHighScoreElement.textContent =
+                String(game.highScore).padStart(5, "0");
+        }
+
+        if (gameOverScreen) {
+            gameOverScreen.classList.add("visible");
+            gameOverScreen.setAttribute(
+                "aria-hidden",
+                "false"
+            );
+        }
+    }
+
+    /* ==========================================================
+       PAUSE
+    ========================================================== */
+
+    function togglePause() {
+        if (!game.running || game.gameOver) {
+            return;
+        }
+
+        game.paused = !game.paused;
+
+        if (game.paused) {
+            if (pauseButton) {
+                pauseButton.textContent = "Resume";
+                pauseButton.setAttribute(
+                    "aria-label",
+                    "Resume game"
+                );
+            }
+        } else {
+            if (pauseButton) {
+                pauseButton.textContent = "Pause";
+                pauseButton.setAttribute(
+                    "aria-label",
+                    "Pause game"
+                );
+            }
+
+            game.lastTime = performance.now();
+        }
+
+        draw();
+    }
+
+    /* ==========================================================
+       RESET
+    ========================================================== */
+
+    function resetGame() {
+        game.running = false;
+        game.paused = false;
+        game.gameOver = false;
+
+        game.score = 0;
+        game.distance = 0;
+
+        game.nextObstacle = 850;
+        game.nextMessage = 500;
+
+        game.message = "";
+        game.messageTimer = 0;
+
+        obstacles.length = 0;
+
+        avi.reset();
+
+        updateScoreUI();
+
+        if (pauseButton) {
+            pauseButton.textContent = "Pause";
+            pauseButton.setAttribute(
+                "aria-label",
+                "Pause game"
+            );
+        }
+
+        if (gameOverScreen) {
+            gameOverScreen.classList.remove("visible");
+            gameOverScreen.setAttribute(
+                "aria-hidden",
+                "true"
+            );
+        }
+
+        if (startScreen) {
+            startScreen.classList.add("visible");
+            startScreen.setAttribute(
+                "aria-hidden",
+                "false"
+            );
+        }
+
+        draw();
+    }
+
+    /* ==========================================================
+       AUDIO INITIALIZATION
+    ========================================================== */
+
+    function ensureAudio() {
+        if (!soundEnabled) {
+            return;
+        }
+
+        getAudioContext();
+    }
+
+    /* ==========================================================
+       INPUT
+    ========================================================== */
+
+    function handleJumpInput(event) {
+        if (event) {
+            /*
+             * Don't steal keyboard input from controls.
+             */
             if (
-                event.target === canvas
+                event.target &&
+                (
+                    event.target.tagName === "BUTTON" ||
+                    event.target.tagName === "INPUT"
+                )
+            ) {
+                return;
+            }
+
+            if (
+                event.type === "keydown" &&
+                (
+                    event.code !== "Space" &&
+                    event.code !== "ArrowUp" &&
+                    event.code !== "KeyW"
+                )
+            ) {
+                return;
+            }
+
+            if (
+                event.type === "keydown" &&
+                event.repeat
+            ) {
+                return;
+            }
+
+            if (
+                event.type === "keydown" &&
+                event.code === "Space"
             ) {
                 event.preventDefault();
             }
-        },
-        { passive: false }
+        }
+
+        if (!game.running && !game.gameOver) {
+            startGame();
+            return;
+        }
+
+        avi.jump();
+    }
+
+    window.addEventListener(
+        "keydown",
+        handleJumpInput
     );
 
+    canvas.addEventListener(
+        "pointerdown",
+        event => {
+            event.preventDefault();
+            handleJumpInput();
+        }
+    );
 
-    /* ======================================================
-       UTILITY: ROUNDED RECTANGLE
-    ====================================================== */
+    /* ==========================================================
+       BUTTONS
+    ========================================================== */
+
+    if (startButton) {
+        startButton.addEventListener(
+            "click",
+            startGame
+        );
+    }
+
+    if (restartButton) {
+        restartButton.addEventListener(
+            "click",
+            startGame
+        );
+    }
+
+    if (pauseButton) {
+        pauseButton.addEventListener(
+            "click",
+            togglePause
+        );
+    }
+
+    if (resetButton) {
+        resetButton.addEventListener(
+            "click",
+            resetGame
+        );
+    }
+
+    /* ==========================================================
+       TOUCH / MOBILE
+    ========================================================== */
+
+    let touchStartY = 0;
+
+    canvas.addEventListener(
+        "touchstart",
+        event => {
+            if (!event.touches.length) {
+                return;
+            }
+
+            touchStartY =
+                event.touches[0].clientY;
+        },
+        { passive: true }
+    );
+
+    canvas.addEventListener(
+        "touchend",
+        event => {
+            if (!event.changedTouches.length) {
+                return;
+            }
+
+            const touchEndY =
+                event.changedTouches[0].clientY;
+
+            const difference =
+                touchStartY - touchEndY;
+
+            /*
+             * A swipe upward or ordinary tap can jump.
+             */
+            if (difference > 25 || Math.abs(difference) < 25) {
+                handleJumpInput();
+            }
+        },
+        { passive: true }
+    );
+
+    /* ==========================================================
+       UTILITY
+    ========================================================== */
 
     function roundRect(
         context,
         x,
         y,
-        width,
-        height,
+        w,
+        h,
         radius
     ) {
-        const r =
-            Math.min(
-                radius,
-                width / 2,
-                height / 2
-            );
+        const r = Math.min(
+            radius,
+            w / 2,
+            h / 2
+        );
 
         context.beginPath();
 
-        context.moveTo(
-            x + r,
-            y
-        );
-
+        context.moveTo(x + r, y);
         context.arcTo(
-            x + width,
+            x + w,
             y,
-            x + width,
-            y + height,
+            x + w,
+            y + h,
             r
         );
 
         context.arcTo(
-            x + width,
-            y + height,
+            x + w,
+            y + h,
             x,
-            y + height,
+            y + h,
             r
         );
 
         context.arcTo(
             x,
-            y + height,
+            y + h,
             x,
             y,
             r
@@ -1538,7 +1576,7 @@
         context.arcTo(
             x,
             y,
-            x + width,
+            x + w,
             y,
             r
         );
@@ -1546,32 +1584,51 @@
         context.closePath();
     }
 
-
-    /* ======================================================
-       INITIALIZATION
-    ====================================================== */
+    /* ==========================================================
+       INITIALIZE
+    ========================================================== */
 
     function initialize() {
         resizeCanvas();
 
         avi.reset();
 
-        terrain.reset();
-
         createStars();
+        createDebris();
 
-        updateScoreDisplay();
+        updateScoreUI();
+        readSpeed();
+
+        /*
+         * Make sure the game begins in a clean,
+         * not-running state.
+         */
+        game.running = false;
+        game.paused = false;
+        game.gameOver = false;
+
+        if (startScreen) {
+            startScreen.classList.add("visible");
+            startScreen.setAttribute(
+                "aria-hidden",
+                "false"
+            );
+        }
+
+        if (gameOverScreen) {
+            gameOverScreen.classList.remove("visible");
+            gameOverScreen.setAttribute(
+                "aria-hidden",
+                "true"
+            );
+        }
 
         draw();
 
-        /*
-         * The game itself waits for the user's first action.
-         * This keeps audio/browser autoplay policies happy.
-         */
+        game.lastTime = performance.now();
 
-        running = false;
-        paused = false;
-        gameOver = false;
+        game.animationFrame =
+            requestAnimationFrame(gameLoop);
     }
 
     initialize();
