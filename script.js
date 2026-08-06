@@ -1,2729 +1,1579 @@
-/* =========================================================
+/* ==========================================================
    AVENMARK AVI RUNNER
-   script.js
+   GAME ENGINE
+========================================================== */
 
-   Main game engine
-   ========================================================= */
+(() => {
+    "use strict";
 
+    /* ======================================================
+       ELEMENTS
+    ====================================================== */
 
-/* =========================================================
-   GAME CONFIGURATION
-   ========================================================= */
+    const canvas = document.getElementById("gameCanvas");
+    const ctx = canvas ? canvas.getContext("2d") : null;
 
-const GAME = {
-    FPS: 60,
-
-    BASE_SPEED: 390,
-    MAX_SPEED: 820,
-    SPEED_INCREMENT: 0.055,
-
-    GRAVITY: 2350,
-    JUMP_VELOCITY: -850,
-
-    STARTING_LIVES: 1,
-
-    SCORE_RATE: 0.022,
-
-    MIN_OBSTACLE_GAP: 310,
-    MAX_OBSTACLE_GAP: 650,
-
-    STAR_COUNT: 100,
-    SHOOTING_STAR_CHANCE: 0.0025,
-
-    GROUND_HEIGHT: 76,
-
-    PLAYER_WIDTH: 48,
-    PLAYER_HEIGHT: 62,
-
-    COLLISION_PADDING: 8,
-
-    HIGH_SCORE_KEY: "avenmark-avi-runner-high-score"
-};
-
-
-/* =========================================================
-   DOM REFERENCES
-   ========================================================= */
-
-const canvas = document.getElementById("game-canvas");
-const ctx = canvas.getContext("2d");
-
-const gameContainer = document.getElementById("game-container");
-
-const startScreen = document.getElementById("start-screen");
-const gameOverScreen = document.getElementById("game-over-screen");
-const pauseScreen = document.getElementById("pause-screen");
-
-const startButton = document.getElementById("start-button");
-const restartButton = document.getElementById("restart-button");
-const resumeButton = document.getElementById("resume-button");
-
-const touchJump = document.getElementById("touch-jump");
-
-const scoreElement = document.getElementById("score");
-const highScoreElement = document.getElementById("high-score");
-
-const finalScoreElement = document.getElementById("final-score");
-const finalHighScoreElement = document.getElementById("final-high-score");
-
-const statusText = document.getElementById("status-text");
-const statusIndicator = document.getElementById("status-indicator");
-
-
-/* =========================================================
-   CANVAS STATE
-   ========================================================= */
-
-let canvasWidth = 0;
-let canvasHeight = 0;
-let devicePixelRatio = 1;
-
-
-/* =========================================================
-   GAME STATE
-   ========================================================= */
-
-const GameState = {
-    READY: "ready",
-    RUNNING: "running",
-    PAUSED: "paused",
-    GAME_OVER: "game-over"
-};
-
-let gameState = GameState.READY;
-
-let lastTime = 0;
-let elapsedTime = 0;
-
-let currentSpeed = GAME.BASE_SPEED;
-let score = 0;
-
-let highScore = loadHighScore();
-
-let distance = 0;
-
-let animationFrame = null;
-
-let obstacleTimer = 0;
-let nextObstacleDistance = 500;
-
-let groundOffset = 0;
-
-
-/* =========================================================
-   WORLD OBJECTS
-   ========================================================= */
-
-let stars = [];
-let shootingStars = [];
-let obstacles = [];
-let particles = [];
-let backgroundObjects = [];
-
-
-/* =========================================================
-   PLAYER
-   ========================================================= */
-
-const player = {
-    x: 0,
-    y: 0,
-
-    width: GAME.PLAYER_WIDTH,
-    height: GAME.PLAYER_HEIGHT,
-
-    velocityY: 0,
-
-    grounded: true,
-    jumping: false,
-
-    squash: 1,
-    stretch: 1,
-
-    blinkTimer: 0,
-    blinkInterval: 2.7,
-
-    animationTime: 0,
-    runFrame: 0,
-
-    reset() {
-        this.width = GAME.PLAYER_WIDTH;
-        this.height = GAME.PLAYER_HEIGHT;
-
-        this.x = Math.max(
-            55,
-            canvasWidth * 0.12
-        );
-
-        this.y =
-            canvasHeight -
-            GAME.GROUND_HEIGHT -
-            this.height;
-
-        this.velocityY = 0;
-
-        this.grounded = true;
-        this.jumping = false;
-
-        this.squash = 1;
-        this.stretch = 1;
-
-        this.blinkTimer = 0;
-        this.blinkInterval = 2.7;
-
-        this.animationTime = 0;
-        this.runFrame = 0;
-    },
-
-    jump() {
-        if (gameState !== GameState.RUNNING) {
-            return;
-        }
-
-        if (!this.grounded) {
-            return;
-        }
-
-        this.velocityY = GAME.JUMP_VELOCITY;
-
-        this.grounded = false;
-        this.jumping = true;
-
-        this.squash = 0.86;
-        this.stretch = 1.14;
-
-        createJumpParticles();
-    },
-
-    update(deltaTime) {
-        this.animationTime += deltaTime;
-
-        this.blinkTimer += deltaTime;
-
-        if (this.blinkTimer >= this.blinkInterval) {
-            this.blinkTimer = 0;
-
-            this.blinkInterval =
-                2.2 +
-                Math.random() * 3.8;
-        }
-
-        if (!this.grounded) {
-            this.velocityY += GAME.GRAVITY * deltaTime;
-
-            this.y += this.velocityY * deltaTime;
-
-            this.stretch = this.velocityY < 0
-                ? 1.08
-                : 0.96;
-
-            this.squash = 1;
-
-            const groundY =
-                canvasHeight -
-                GAME.GROUND_HEIGHT -
-                this.height;
-
-            if (this.y >= groundY) {
-                this.y = groundY;
-
-                this.velocityY = 0;
-
-                this.grounded = true;
-                this.jumping = false;
-
-                this.squash = 1.12;
-                this.stretch = 0.92;
-
-                createLandingParticles();
-            }
-        }
-
-        this.squash +=
-            (1 - this.squash) *
-            Math.min(1, deltaTime * 11);
-
-        this.stretch +=
-            (1 - this.stretch) *
-            Math.min(1, deltaTime * 11);
-
-        if (this.grounded) {
-            this.runFrame =
-                Math.floor(
-                    this.animationTime * 10
-                ) % 2;
-        }
-    },
-
-    getCollisionBox() {
-        return {
-            x:
-                this.x +
-                GAME.COLLISION_PADDING,
-
-            y:
-                this.y +
-                GAME.COLLISION_PADDING,
-
-            width:
-                this.width -
-                GAME.COLLISION_PADDING * 2,
-
-            height:
-                this.height -
-                GAME.COLLISION_PADDING * 2
-        };
-    },
-
-    draw() {
-        drawAvi(
-            this.x + this.width / 2,
-            this.y + this.height / 2,
-            this.squash,
-            this.stretch
-        );
+    if (!canvas || !ctx) {
+        console.error("Avenmark Avi Runner: game canvas not found.");
+        return;
     }
-};
+
+    const scoreElement =
+        document.getElementById("score") ||
+        document.getElementById("current-score");
+
+    const highScoreElement =
+        document.getElementById("highScore") ||
+        document.getElementById("high-score");
+
+    const speedSlider =
+        document.getElementById("speedSlider") ||
+        document.getElementById("speed-slider");
+
+    const soundToggle =
+        document.getElementById("soundToggle") ||
+        document.getElementById("sound-toggle");
+
+    const pauseButton =
+        document.getElementById("pauseButton") ||
+        document.getElementById("pause-button");
+
+    const resetButton =
+        document.getElementById("resetButton") ||
+        document.getElementById("reset-button");
+
+    const startScreen = document.getElementById("startScreen");
+    const gameOverScreen = document.getElementById("gameOverScreen");
+
+    const startButton =
+        document.getElementById("startButton") ||
+        document.getElementById("start-button");
+
+    const restartButton =
+        document.getElementById("restartButton") ||
+        document.getElementById("restart-button");
+
+    const gameOverScore =
+        document.getElementById("gameOverScore") ||
+        document.getElementById("game-over-score");
 
 
-/* =========================================================
-   INITIALIZATION
-   ========================================================= */
+    /* ======================================================
+       AVENMARK DESIGN TOKENS
+    ====================================================== */
 
-function initialize() {
+    const AVENMARK = {
+        background: "#F5F5F2",
+        dark: "#2F2F2F",
+        blue: "#103159",
+        copper: "#C47A45",
+        white: "#F5F5F2",
+        muted: "#777777",
+        line: "rgba(47, 47, 47, 0.10)"
+    };
+
+
+    /* ======================================================
+       GAME SETTINGS
+    ====================================================== */
+
+    const WORLD = {
+        gravity: 0.72,
+        jumpPower: -13.4,
+        baseSpeed: 6.2,
+        maxSpeedMultiplier: 1.45,
+        minSpeedMultiplier: 0.88,
+        groundHeight: 76,
+        startingDistance: 520
+    };
+
+    let speedMultiplier = 1;
+    let gameSpeed = WORLD.baseSpeed;
+
+    let running = false;
+    let paused = false;
+    let gameOver = false;
+
+    let score = 0;
+    let highScore = Number(
+        localStorage.getItem("avenmarkAviHighScore") || 0
+    );
+
+    let lastTime = 0;
+    let scoreAccumulator = 0;
+
+    let nextObstacleDistance = WORLD.startingDistance;
+
+    let animationFrame = null;
+
+    let soundEnabled = true;
+    let audioContext = null;
+
+
+    /* ======================================================
+       CANVAS
+    ====================================================== */
+
+    function resizeCanvas() {
+        const rect = canvas.getBoundingClientRect();
+
+        const dpr = Math.min(window.devicePixelRatio || 1, 2);
+
+        canvas.width = Math.floor(rect.width * dpr);
+        canvas.height = Math.floor(rect.height * dpr);
+
+        ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+    }
+
+    window.addEventListener("resize", resizeCanvas);
+
     resizeCanvas();
 
-    createStars();
-    createBackgroundObjects();
 
-    player.reset();
+    /* ======================================================
+       HELPERS
+    ====================================================== */
 
-    updateScoreDisplay();
-
-    setStatus("READY");
-
-    draw();
-
-    if (!animationFrame) {
-        animationFrame = requestAnimationFrame(gameLoop);
+    function width() {
+        return canvas.getBoundingClientRect().width;
     }
-}
+
+    function height() {
+        return canvas.getBoundingClientRect().height;
+    }
+
+    function groundY() {
+        return height() - WORLD.groundHeight;
+    }
+
+    function random(min, max) {
+        return Math.random() * (max - min) + min;
+    }
+
+    function clamp(value, min, max) {
+        return Math.max(min, Math.min(max, value));
+    }
 
 
-/* =========================================================
-   CANVAS RESIZING
-   ========================================================= */
+    /* ======================================================
+       AUDIO
+       Original tiny synthesized Avenmark sound set.
+    ====================================================== */
 
-function resizeCanvas() {
-    const rect =
-        gameContainer.getBoundingClientRect();
+    function initializeAudio() {
+        if (audioContext) return;
 
-    devicePixelRatio =
-        Math.min(
-            window.devicePixelRatio || 1,
-            2
-        );
+        const AudioContext =
+            window.AudioContext ||
+            window.webkitAudioContext;
 
-    canvasWidth = Math.max(
-        1,
-        Math.floor(rect.width)
-    );
+        if (!AudioContext) return;
 
-    canvasHeight = Math.max(
-        1,
-        Math.floor(rect.height)
-    );
+        audioContext = new AudioContext();
+    }
 
-    canvas.width =
-        Math.floor(
-            canvasWidth * devicePixelRatio
-        );
-
-    canvas.height =
-        Math.floor(
-            canvasHeight * devicePixelRatio
-        );
-
-    canvas.style.width =
-        `${canvasWidth}px`;
-
-    canvas.style.height =
-        `${canvasHeight}px`;
-
-    ctx.setTransform(
-        devicePixelRatio,
-        0,
-        0,
-        devicePixelRatio,
-        0,
-        0
-    );
-
-    player.x = Math.max(
-        55,
-        canvasWidth * 0.12
-    );
-
-    if (
-        gameState === GameState.READY ||
-        gameState === GameState.GAME_OVER
+    function playTone(
+        frequency,
+        duration = 0.08,
+        type = "sine",
+        volume = 0.025
     ) {
-        player.reset();
-    }
-}
+        if (!soundEnabled) return;
 
+        initializeAudio();
 
-/* =========================================================
-   START GAME
-   ========================================================= */
+        if (!audioContext) return;
 
-function startGame() {
-    resetGame();
-
-    gameState = GameState.RUNNING;
-
-    hideOverlay(startScreen);
-    hideOverlay(gameOverScreen);
-    hideOverlay(pauseScreen);
-
-    setStatus("MISSION ACTIVE");
-
-    lastTime = performance.now();
-}
-
-
-/* =========================================================
-   RESET GAME
-   ========================================================= */
-
-function resetGame() {
-    score = 0;
-
-    distance = 0;
-
-    elapsedTime = 0;
-
-    currentSpeed =
-        GAME.BASE_SPEED;
-
-    obstacleTimer = 0;
-
-    nextObstacleDistance =
-        randomRange(
-            GAME.MIN_OBSTACLE_GAP,
-            GAME.MAX_OBSTACLE_GAP
-        );
-
-    groundOffset = 0;
-
-    obstacles = [];
-    particles = [];
-    shootingStars = [];
-
-    player.reset();
-
-    updateScoreDisplay();
-}
-
-
-/* =========================================================
-   GAME LOOP
-   ========================================================= */
-
-function gameLoop(timestamp) {
-    if (!lastTime) {
-        lastTime = timestamp;
-    }
-
-    let deltaTime =
-        (timestamp - lastTime) / 1000;
-
-    lastTime = timestamp;
-
-    deltaTime =
-        Math.min(deltaTime, 0.05);
-
-    if (gameState === GameState.RUNNING) {
-        update(deltaTime);
-    }
-
-    draw();
-
-    animationFrame =
-        requestAnimationFrame(gameLoop);
-}
-
-
-/* =========================================================
-   GAME UPDATE
-   ========================================================= */
-
-function update(deltaTime) {
-    elapsedTime += deltaTime;
-
-    distance +=
-        currentSpeed *
-        deltaTime;
-
-    score +=
-        GAME.SCORE_RATE *
-        currentSpeed *
-        deltaTime;
-
-    currentSpeed =
-        Math.min(
-            GAME.MAX_SPEED,
-            GAME.BASE_SPEED +
-            elapsedTime * 5.2
-        );
-
-    groundOffset +=
-        currentSpeed *
-        deltaTime;
-
-    player.update(deltaTime);
-
-    updateStars(deltaTime);
-    updateBackgroundObjects(deltaTime);
-    updateObstacles(deltaTime);
-    updateParticles(deltaTime);
-    updateShootingStars(deltaTime);
-
-    spawnShootingStars();
-
-    updateScoreDisplay();
-
-    checkCollisions();
-}
-
-
-/* =========================================================
-   SCORE
-   ========================================================= */
-
-function getDisplayedScore() {
-    return Math.floor(score);
-}
-
-function updateScoreDisplay() {
-    const displayed =
-        formatScore(getDisplayedScore());
-
-    scoreElement.textContent =
-        displayed;
-
-    highScoreElement.textContent =
-        formatScore(highScore);
-}
-
-function formatScore(value) {
-    return String(
-        Math.max(0, Math.floor(value))
-    ).padStart(5, "0");
-}
-
-
-/* =========================================================
-   HIGH SCORE
-   ========================================================= */
-
-function loadHighScore() {
-    try {
-        const stored =
-            localStorage.getItem(
-                GAME.HIGH_SCORE_KEY
-            );
-
-        const parsed =
-            Number(stored);
-
-        return Number.isFinite(parsed)
-            ? parsed
-            : 0;
-    } catch {
-        return 0;
-    }
-}
-
-function saveHighScore(value) {
-    try {
-        localStorage.setItem(
-            GAME.HIGH_SCORE_KEY,
-            String(value)
-        );
-    } catch {
-        /* Local storage may be unavailable. */
-    }
-}
-
-
-/* =========================================================
-   GAME OVER
-   ========================================================= */
-
-function endGame() {
-    if (gameState === GameState.GAME_OVER) {
-        return;
-    }
-
-    gameState = GameState.GAME_OVER;
-
-    const finalScore =
-        getDisplayedScore();
-
-    if (finalScore > highScore) {
-        highScore = finalScore;
-
-        saveHighScore(highScore);
-    }
-
-    finalScoreElement.textContent =
-        formatScore(finalScore);
-
-    finalHighScoreElement.textContent =
-        formatScore(highScore);
-
-    updateScoreDisplay();
-
-    setStatus("MISSION ENDED");
-
-    createCrashParticles();
-
-    showOverlay(gameOverScreen);
-}
-
-
-/* =========================================================
-   PAUSE
-   ========================================================= */
-
-function pauseGame() {
-    if (gameState !== GameState.RUNNING) {
-        return;
-    }
-
-    gameState = GameState.PAUSED;
-
-    setStatus("PAUSED");
-
-    showOverlay(pauseScreen);
-}
-
-function resumeGame() {
-    if (gameState !== GameState.PAUSED) {
-        return;
-    }
-
-    gameState = GameState.RUNNING;
-
-    lastTime = performance.now();
-
-    hideOverlay(pauseScreen);
-
-    setStatus("MISSION ACTIVE");
-}
-
-
-/* =========================================================
-   OVERLAY HELPERS
-   ========================================================= */
-
-function showOverlay(element) {
-    element.classList.remove("hidden");
-}
-
-function hideOverlay(element) {
-    element.classList.add("hidden");
-}
-
-
-/* =========================================================
-   STATUS
-   ========================================================= */
-
-function setStatus(text) {
-    statusText.textContent = text;
-
-    if (gameState === GameState.RUNNING) {
-        statusIndicator.style.opacity = "1";
-    } else {
-        statusIndicator.style.opacity = "0.45";
-    }
-}
-
-
-/* =========================================================
-   STARS
-   ========================================================= */
-
-function createStars() {
-    stars = [];
-
-    for (
-        let i = 0;
-        i < GAME.STAR_COUNT;
-        i++
-    ) {
-        stars.push({
-            x: Math.random() * canvasWidth,
-
-            y:
-                Math.random() *
-                Math.max(
-                    100,
-                    canvasHeight * 0.72
-                ),
-
-            radius:
-                randomRange(0.35, 1.55),
-
-            alpha:
-                randomRange(0.25, 0.9),
-
-            speed:
-                randomRange(0.025, 0.13),
-
-            twinkle:
-                randomRange(0.5, 2.2),
-
-            phase:
-                Math.random() * Math.PI * 2
-        });
-    }
-}
-
-function updateStars(deltaTime) {
-    for (const star of stars) {
-        star.x -=
-            currentSpeed *
-            star.speed *
-            deltaTime;
-
-        if (star.x < -5) {
-            star.x =
-                canvasWidth + 5;
-
-            star.y =
-                Math.random() *
-                Math.max(
-                    100,
-                    canvasHeight * 0.72
-                );
+        if (audioContext.state === "suspended") {
+            audioContext.resume();
         }
 
-        star.phase +=
-            star.twinkle *
-            deltaTime;
-    }
-}
+        const oscillator = audioContext.createOscillator();
+        const gain = audioContext.createGain();
 
-function drawStars() {
-    for (const star of stars) {
-        const alpha =
-            star.alpha *
-            (
-                0.7 +
-                Math.sin(star.phase) * 0.3
-            );
-
-        ctx.globalAlpha =
-            Math.max(0.08, alpha);
-
-        ctx.fillStyle =
-            "#FFFFFF";
-
-        ctx.beginPath();
-
-        ctx.arc(
-            star.x,
-            star.y,
-            star.radius,
-            0,
-            Math.PI * 2
+        oscillator.type = type;
+        oscillator.frequency.setValueAtTime(
+            frequency,
+            audioContext.currentTime
         );
 
-        ctx.fill();
-    }
-
-    ctx.globalAlpha = 1;
-}
-
-
-/* =========================================================
-   BACKGROUND SPACE OBJECTS
-   ========================================================= */
-
-function createBackgroundObjects() {
-    backgroundObjects = [];
-
-    const count =
-        Math.max(
-            3,
-            Math.floor(canvasWidth / 260)
+        gain.gain.setValueAtTime(
+            volume,
+            audioContext.currentTime
         );
 
-    for (let i = 0; i < count; i++) {
-        backgroundObjects.push({
-            x:
-                Math.random() *
-                canvasWidth,
-
-            y:
-                randomRange(
-                    canvasHeight * 0.18,
-                    canvasHeight * 0.55
-                ),
-
-            size:
-                randomRange(18, 46),
-
-            speed:
-                randomRange(0.025, 0.075),
-
-            type:
-                Math.random() > 0.5
-                    ? "planet"
-                    : "moon",
-
-            alpha:
-                randomRange(0.08, 0.2)
-        });
-    }
-}
-
-function updateBackgroundObjects(deltaTime) {
-    for (const object of backgroundObjects) {
-        object.x -=
-            currentSpeed *
-            object.speed *
-            deltaTime;
-
-        if (
-            object.x <
-            -object.size * 2
-        ) {
-            object.x =
-                canvasWidth +
-                object.size * 2;
-
-            object.y =
-                randomRange(
-                    canvasHeight * 0.18,
-                    canvasHeight * 0.55
-                );
-        }
-    }
-}
-
-function drawBackgroundObjects() {
-    for (const object of backgroundObjects) {
-        ctx.save();
-
-        ctx.globalAlpha =
-            object.alpha;
-
-        if (object.type === "planet") {
-            drawPlanet(
-                object.x,
-                object.y,
-                object.size
-            );
-        } else {
-            drawMoon(
-                object.x,
-                object.y,
-                object.size
-            );
-        }
-
-        ctx.restore();
-    }
-}
-
-
-/* =========================================================
-   PLANET
-   ========================================================= */
-
-function drawPlanet(x, y, size) {
-    const gradient =
-        ctx.createRadialGradient(
-            x - size * 0.35,
-            y - size * 0.4,
-            size * 0.1,
-            x,
-            y,
-            size
+        gain.gain.exponentialRampToValueAtTime(
+            0.0001,
+            audioContext.currentTime + duration
         );
 
-    gradient.addColorStop(
-        0,
-        "#FFFFFF"
-    );
+        oscillator.connect(gain);
+        gain.connect(audioContext.destination);
 
-    gradient.addColorStop(
-        1,
-        "#6078A8"
-    );
-
-    ctx.fillStyle = gradient;
-
-    ctx.beginPath();
-
-    ctx.arc(
-        x,
-        y,
-        size,
-        0,
-        Math.PI * 2
-    );
-
-    ctx.fill();
-}
-
-
-/* =========================================================
-   MOON
-   ========================================================= */
-
-function drawMoon(x, y, size) {
-    ctx.fillStyle =
-        "#AAB7D0";
-
-    ctx.beginPath();
-
-    ctx.arc(
-        x,
-        y,
-        size,
-        0,
-        Math.PI * 2
-    );
-
-    ctx.fill();
-
-    ctx.globalAlpha *= 0.4;
-
-    ctx.fillStyle =
-        "#596783";
-
-    ctx.beginPath();
-
-    ctx.arc(
-        x - size * 0.3,
-        y - size * 0.15,
-        size * 0.18,
-        0,
-        Math.PI * 2
-    );
-
-    ctx.fill();
-
-    ctx.beginPath();
-
-    ctx.arc(
-        x + size * 0.25,
-        y + size * 0.3,
-        size * 0.12,
-        0,
-        Math.PI * 2
-    );
-
-    ctx.fill();
-}
-
-
-/* =========================================================
-   SHOOTING STARS
-   ========================================================= */
-
-function spawnShootingStars() {
-    if (
-        Math.random() >
-        GAME.SHOOTING_STAR_CHANCE
-    ) {
-        return;
+        oscillator.start();
+        oscillator.stop(
+            audioContext.currentTime + duration
+        );
     }
 
-    shootingStars.push({
-        x:
-            randomRange(
-                canvasWidth * 0.4,
-                canvasWidth + 100
-            ),
+    function playJumpSound() {
+        playTone(520, 0.07, "sine", 0.022);
 
-        y:
-            randomRange(
-                20,
-                canvasHeight * 0.45
-            ),
-
-        length:
-            randomRange(30, 85),
-
-        speed:
-            randomRange(500, 850),
-
-        life: 0,
-
-        maxLife:
-            randomRange(0.4, 0.9)
-    });
-}
-
-function updateShootingStars(deltaTime) {
-    for (
-        let i = shootingStars.length - 1;
-        i >= 0;
-        i--
-    ) {
-        const star =
-            shootingStars[i];
-
-        star.life += deltaTime;
-
-        star.x -=
-            star.speed *
-            deltaTime;
-
-        star.y +=
-            star.speed *
-            0.32 *
-            deltaTime;
-
-        if (
-            star.life >=
-            star.maxLife
-        ) {
-            shootingStars.splice(i, 1);
-        }
+        setTimeout(() => {
+            playTone(690, 0.08, "sine", 0.018);
+        }, 30);
     }
-}
 
-function drawShootingStars() {
-    for (const star of shootingStars) {
-        const alpha =
-            1 -
-            star.life /
-            star.maxLife;
-
-        ctx.save();
-
-        ctx.globalAlpha =
-            Math.max(0, alpha);
-
-        const gradient =
-            ctx.createLinearGradient(
-                star.x,
-                star.y,
-                star.x + star.length,
-                star.y - star.length * 0.32
-            );
-
-        gradient.addColorStop(
-            0,
-            "rgba(255,255,255,0)"
-        );
-
-        gradient.addColorStop(
-            1,
-            "rgba(255,255,255,0.85)"
-        );
-
-        ctx.strokeStyle =
-            gradient;
-
-        ctx.lineWidth = 1.5;
-
-        ctx.beginPath();
-
-        ctx.moveTo(
-            star.x,
-            star.y
-        );
-
-        ctx.lineTo(
-            star.x + star.length,
-            star.y -
-                star.length * 0.32
-        );
-
-        ctx.stroke();
-
-        ctx.restore();
+    function playScoreSound() {
+        playTone(740, 0.06, "triangle", 0.018);
+        setTimeout(() => {
+            playTone(920, 0.08, "triangle", 0.014);
+        }, 45);
     }
-}
 
+    function playGameOverSound() {
+        playTone(300, 0.13, "sine", 0.025);
 
-/* =========================================================
-   OBSTACLES
-   =========================================================
-
-   The cactus system from the original Dino game is replaced
-   with space obstacles.
-   ========================================================= */
-
-const OBSTACLE_TYPES = [
-    {
-        type: "asteroid",
-        width: 42,
-        height: 42,
-        minScale: 0.85,
-        maxScale: 1.2
-    },
-
-    {
-        type: "satellite",
-        width: 54,
-        height: 44,
-        minScale: 0.85,
-        maxScale: 1.1
-    },
-
-    {
-        type: "spaceRock",
-        width: 34,
-        height: 50,
-        minScale: 0.8,
-        maxScale: 1.15
+        setTimeout(() => {
+            playTone(220, 0.18, "sine", 0.018);
+        }, 100);
     }
-];
 
 
-function createObstacle() {
-    const type =
-        OBSTACLE_TYPES[
-            Math.floor(
-                Math.random() *
-                OBSTACLE_TYPES.length
-            )
-        ];
+    /* ======================================================
+       AVI
+    ====================================================== */
 
-    const scale =
-        randomRange(
-            type.minScale,
-            type.maxScale
-        );
-
-    const obstacle = {
-        type: type.type,
-
-        x:
-            canvasWidth + 40,
-
+    const avi = {
+        x: 90,
         y: 0,
+        width: 48,
+        height: 66,
 
-        width:
-            type.width * scale,
+        velocityY: 0,
 
-        height:
-            type.height * scale,
+        grounded: true,
 
-        scale,
+        runCycle: 0,
 
-        rotation:
-            randomRange(
-                -0.25,
-                0.25
-            ),
+        reset() {
+            this.x = Math.max(45, width() * 0.11);
+            this.y = groundY() - this.height;
+            this.velocityY = 0;
+            this.grounded = true;
+            this.runCycle = 0;
+        },
 
-        rotationSpeed:
-            randomRange(
-                -0.8,
-                0.8
-            ),
+        jump() {
+            if (!running || paused || gameOver) return;
 
-        passed: false,
+            if (!this.grounded) return;
 
-        getCollisionBox() {
-            return {
-                x:
-                    this.x +
-                    this.width * 0.15,
+            this.velocityY = WORLD.jumpPower;
+            this.grounded = false;
 
-                y:
-                    this.y +
-                    this.height * 0.12,
+            playJumpSound();
+        },
 
-                width:
-                    this.width * 0.7,
+        update(delta) {
+            this.velocityY += WORLD.gravity * delta;
 
-                height:
-                    this.height * 0.76
-            };
+            this.y += this.velocityY * delta;
+
+            const floor = groundY() - this.height;
+
+            if (this.y >= floor) {
+                this.y = floor;
+                this.velocityY = 0;
+                this.grounded = true;
+            }
+
+            if (this.grounded) {
+                this.runCycle += delta * gameSpeed * 0.11;
+            }
+        },
+
+        draw() {
+            const x = this.x;
+            const y = this.y;
+
+            const runningOffset =
+                this.grounded
+                    ? Math.sin(this.runCycle) * 1.5
+                    : 0;
+
+            ctx.save();
+
+            /*
+             * Backpack
+             */
+
+            ctx.fillStyle = AVENMARK.dark;
+
+            roundRect(
+                ctx,
+                x + 3,
+                y + 22,
+                11,
+                30,
+                5
+            );
+
+            ctx.fill();
+
+            /*
+             * Helmet
+             */
+
+            ctx.beginPath();
+
+            ctx.arc(
+                x + 25,
+                y + 17,
+                16,
+                0,
+                Math.PI * 2
+            );
+
+            ctx.fillStyle = AVENMARK.dark;
+            ctx.fill();
+
+            /*
+             * Helmet glass
+             */
+
+            ctx.beginPath();
+
+            ctx.arc(
+                x + 25,
+                y + 17,
+                11,
+                0,
+                Math.PI * 2
+            );
+
+            ctx.fillStyle = AVENMARK.background;
+            ctx.fill();
+
+            /*
+             * Small blue reflection
+             */
+
+            ctx.beginPath();
+
+            ctx.arc(
+                x + 22,
+                y + 13,
+                5,
+                0,
+                Math.PI * 2
+            );
+
+            ctx.fillStyle = AVENMARK.blue;
+            ctx.globalAlpha = 0.9;
+            ctx.fill();
+
+            ctx.globalAlpha = 1;
+
+            /*
+             * Body
+             */
+
+            ctx.fillStyle = AVENMARK.dark;
+
+            roundRect(
+                ctx,
+                x + 13,
+                y + 29,
+                27,
+                25,
+                8
+            );
+
+            ctx.fill();
+
+            /*
+             * Copper Avenmark detail
+             */
+
+            ctx.fillStyle = AVENMARK.copper;
+
+            roundRect(
+                ctx,
+                x + 20,
+                y + 34,
+                13,
+                7,
+                2
+            );
+
+            ctx.fill();
+
+            /*
+             * Laptop held in front.
+             */
+
+            const laptopX = x + 31;
+            const laptopY = y + 35;
+
+            ctx.fillStyle = AVENMARK.blue;
+
+            roundRect(
+                ctx,
+                laptopX,
+                laptopY,
+                20,
+                14,
+                3
+            );
+
+            ctx.fill();
+
+            ctx.fillStyle = AVENMARK.background;
+
+            roundRect(
+                ctx,
+                laptopX + 3,
+                laptopY + 3,
+                14,
+                8,
+                1.5
+            );
+
+            ctx.fill();
+
+            /*
+             * Laptop copper mark.
+             */
+
+            ctx.fillStyle = AVENMARK.copper;
+
+            ctx.fillRect(
+                laptopX + 8,
+                laptopY + 6,
+                4,
+                2
+            );
+
+            /*
+             * Legs
+             */
+
+            const legOffset =
+                this.grounded
+                    ? Math.sin(this.runCycle) * 4
+                    : 0;
+
+            ctx.strokeStyle = AVENMARK.dark;
+            ctx.lineWidth = 7;
+            ctx.lineCap = "round";
+
+            ctx.beginPath();
+
+            ctx.moveTo(
+                x + 20,
+                y + 51
+            );
+
+            ctx.lineTo(
+                x + 17 - legOffset,
+                y + 64
+            );
+
+            ctx.stroke();
+
+            ctx.beginPath();
+
+            ctx.moveTo(
+                x + 34,
+                y + 51
+            );
+
+            ctx.lineTo(
+                x + 37 + legOffset,
+                y + 64
+            );
+
+            ctx.stroke();
+
+            /*
+             * Boots
+             */
+
+            ctx.lineWidth = 6;
+
+            ctx.beginPath();
+
+            ctx.moveTo(
+                x + 14 - legOffset,
+                y + 64
+            );
+
+            ctx.lineTo(
+                x + 21 - legOffset,
+                y + 64
+            );
+
+            ctx.stroke();
+
+            ctx.beginPath();
+
+            ctx.moveTo(
+                x + 34 + legOffset,
+                y + 64
+            );
+
+            ctx.lineTo(
+                x + 41 + legOffset,
+                y + 64
+            );
+
+            ctx.stroke();
+
+            ctx.restore();
         }
     };
 
-    obstacle.y =
-        canvasHeight -
-        GAME.GROUND_HEIGHT -
-        obstacle.height;
 
-    return obstacle;
-}
+    /* ======================================================
+       TERRAIN
+    ====================================================== */
+
+    const terrain = {
+        craters: [],
+        debris: [],
+
+        reset() {
+            this.craters = [];
+            this.debris = [];
+
+            let x = 100;
+
+            while (x < width() + 500) {
+                x += random(160, 300);
+
+                this.craters.push({
+                    x,
+                    width: random(24, 58),
+                    depth: random(4, 10)
+                });
+            }
+
+            x = 180;
+
+            while (x < width() + 700) {
+                x += random(230, 430);
+
+                this.debris.push({
+                    x,
+                    size: random(2, 5),
+                    rotation: random(0, Math.PI),
+                    type: Math.random() > 0.5 ? 1 : 2
+                });
+            }
+        },
+
+        update(delta) {
+            const movement =
+                gameSpeed * delta;
+
+            for (const crater of this.craters) {
+                crater.x -= movement;
+            }
+
+            for (const piece of this.debris) {
+                piece.x -= movement;
+            }
+
+            this.craters = this.craters.filter(
+                crater => crater.x + crater.width > -100
+            );
+
+            this.debris = this.debris.filter(
+                piece => piece.x > -100
+            );
+
+            let furthestCrater =
+                this.craters.reduce(
+                    (max, crater) =>
+                        Math.max(max, crater.x),
+                    width()
+                );
+
+            while (furthestCrater < width() + 300) {
+                const newCrater = {
+                    x: furthestCrater + random(170, 300),
+                    width: random(24, 58),
+                    depth: random(4, 10)
+                };
+
+                this.craters.push(newCrater);
+
+                furthestCrater =
+                    newCrater.x;
+            }
+
+            let furthestDebris =
+                this.debris.reduce(
+                    (max, piece) =>
+                        Math.max(max, piece.x),
+                    width()
+                );
+
+            while (furthestDebris < width() + 600) {
+                const newPiece = {
+                    x: furthestDebris + random(260, 450),
+                    size: random(2, 5),
+                    rotation: random(0, Math.PI),
+                    type: Math.random() > 0.5 ? 1 : 2
+                };
+
+                this.debris.push(newPiece);
+
+                furthestDebris =
+                    newPiece.x;
+            }
+        },
+
+        draw() {
+            const y = groundY();
+
+            /*
+             * Terrain line
+             */
+
+            ctx.strokeStyle =
+                "rgba(47,47,47,0.22)";
+
+            ctx.lineWidth = 1;
+
+            ctx.beginPath();
+
+            ctx.moveTo(0, y);
+            ctx.lineTo(width(), y);
+
+            ctx.stroke();
+
+            /*
+             * Subtle ground texture
+             */
+
+            ctx.strokeStyle =
+                "rgba(47,47,47,0.07)";
+
+            for (const crater of this.craters) {
+                ctx.beginPath();
+
+                ctx.ellipse(
+                    crater.x + crater.width / 2,
+                    y + 2,
+                    crater.width / 2,
+                    crater.depth,
+                    0,
+                    0,
+                    Math.PI
+                );
+
+                ctx.stroke();
+            }
+
+            /*
+             * Small debris
+             */
+
+            for (const piece of this.debris) {
+                ctx.save();
+
+                ctx.translate(
+                    piece.x,
+                    y - 5
+                );
+
+                ctx.rotate(piece.rotation);
+
+                ctx.fillStyle =
+                    "rgba(47,47,47,0.20)";
+
+                if (piece.type === 1) {
+                    ctx.fillRect(
+                        -piece.size,
+                        -piece.size,
+                        piece.size * 2,
+                        piece.size
+                    );
+                } else {
+                    ctx.beginPath();
+
+                    ctx.arc(
+                        0,
+                        0,
+                        piece.size,
+                        0,
+                        Math.PI * 2
+                    );
+
+                    ctx.fill();
+                }
+
+                ctx.restore();
+            }
+        }
+    };
 
 
-function updateObstacles(deltaTime) {
-    obstacleTimer += deltaTime;
+    /* ======================================================
+       UFO OBSTACLES
+    ====================================================== */
 
-    const distanceToNext =
-        nextObstacleDistance;
+    const ufos = [];
 
-    if (
-        obstacles.length === 0 ||
-        distance >=
-            distanceToNext
-    ) {
-        const obstacle =
-            createObstacle();
+    function createUFO() {
+        const altitude =
+            groundY() -
+            random(72, 120);
 
-        obstacles.push(obstacle);
-
-        nextObstacleDistance =
-            distance +
-            calculateObstacleGap();
+        ufos.push({
+            x: width() + random(30, 100),
+            y: altitude,
+            width: 54,
+            height: 25,
+            speedOffset: random(0.96, 1.04),
+            bob: random(0, Math.PI * 2)
+        });
     }
 
-    for (
-        let i = obstacles.length - 1;
-        i >= 0;
-        i--
-    ) {
-        const obstacle =
-            obstacles[i];
+    function updateUFOs(delta) {
+        for (const ufo of ufos) {
+            ufo.x -=
+                gameSpeed *
+                delta *
+                ufo.speedOffset;
 
-        obstacle.x -=
-            currentSpeed *
-            deltaTime;
+            ufo.bob += delta * 0.06;
 
-        obstacle.rotation +=
-            obstacle.rotationSpeed *
-            deltaTime;
+            ufo.y +=
+                Math.sin(ufo.bob) * 0.15;
+        }
 
-        if (
-            !obstacle.passed &&
-            obstacle.x +
-                obstacle.width <
-                player.x
+        while (
+            ufos.length &&
+            ufos[0].x + ufos[0].width < -100
         ) {
-            obstacle.passed = true;
-
-            createPassParticles();
-        }
-
-        if (
-            obstacle.x +
-                obstacle.width <
-            -100
-        ) {
-            obstacles.splice(i, 1);
-        }
-    }
-}
-
-
-function calculateObstacleGap() {
-    const speedFactor =
-        currentSpeed /
-        GAME.BASE_SPEED;
-
-    const difficulty =
-        Math.min(
-            1.4,
-            speedFactor
-        );
-
-    const minimum =
-        GAME.MIN_OBSTACLE_GAP /
-        difficulty;
-
-    const maximum =
-        GAME.MAX_OBSTACLE_GAP /
-        difficulty;
-
-    return randomRange(
-        minimum,
-        maximum
-    );
-}
-
-
-function drawObstacles() {
-    for (const obstacle of obstacles) {
-        if (obstacle.type === "asteroid") {
-            drawAsteroid(obstacle);
-        }
-
-        if (obstacle.type === "satellite") {
-            drawSatellite(obstacle);
-        }
-
-        if (obstacle.type === "spaceRock") {
-            drawSpaceRock(obstacle);
-        }
-    }
-}
-
-
-/* =========================================================
-   ASTEROID
-   ========================================================= */
-
-function drawAsteroid(obstacle) {
-    const cx =
-        obstacle.x +
-        obstacle.width / 2;
-
-    const cy =
-        obstacle.y +
-        obstacle.height / 2;
-
-    const radius =
-        obstacle.width / 2;
-
-    ctx.save();
-
-    ctx.translate(cx, cy);
-
-    ctx.rotate(
-        obstacle.rotation
-    );
-
-    ctx.fillStyle =
-        "#7C879D";
-
-    ctx.beginPath();
-
-    const points = 9;
-
-    for (let i = 0; i < points; i++) {
-        const angle =
-            (
-                Math.PI * 2 /
-                points
-            ) * i;
-
-        const variation =
-            0.75 +
-            Math.sin(i * 5.7) *
-            0.15;
-
-        const r =
-            radius *
-            variation;
-
-        const px =
-            Math.cos(angle) * r;
-
-        const py =
-            Math.sin(angle) * r;
-
-        if (i === 0) {
-            ctx.moveTo(px, py);
-        } else {
-            ctx.lineTo(px, py);
+            ufos.shift();
         }
     }
 
-    ctx.closePath();
+    function drawUFO(ufo) {
+        const x = ufo.x;
+        const y = ufo.y;
 
-    ctx.fill();
+        ctx.save();
 
-    ctx.fillStyle =
-        "rgba(30,38,55,0.42)";
+        /*
+         * UFO body
+         */
 
-    ctx.beginPath();
-
-    ctx.arc(
-        -radius * 0.22,
-        -radius * 0.15,
-        radius * 0.18,
-        0,
-        Math.PI * 2
-    );
-
-    ctx.fill();
-
-    ctx.beginPath();
-
-    ctx.arc(
-        radius * 0.22,
-        radius * 0.25,
-        radius * 0.13,
-        0,
-        Math.PI * 2
-    );
-
-    ctx.fill();
-
-    ctx.restore();
-}
-
-
-/* =========================================================
-   SATELLITE
-   ========================================================= */
-
-function drawSatellite(obstacle) {
-    const cx =
-        obstacle.x +
-        obstacle.width / 2;
-
-    const cy =
-        obstacle.y +
-        obstacle.height / 2;
-
-    ctx.save();
-
-    ctx.translate(cx, cy);
-
-    ctx.rotate(
-        obstacle.rotation * 0.3
-    );
-
-    /* Solar panels */
-
-    ctx.fillStyle =
-        "#455A82";
-
-    ctx.fillRect(
-        -obstacle.width * 0.48,
-        -obstacle.height * 0.16,
-        obstacle.width * 0.28,
-        obstacle.height * 0.32
-    );
-
-    ctx.fillRect(
-        obstacle.width * 0.2,
-        -obstacle.height * 0.16,
-        obstacle.width * 0.28,
-        obstacle.height * 0.32
-    );
-
-    /* Panel lines */
-
-    ctx.strokeStyle =
-        "rgba(255,255,255,0.2)";
-
-    ctx.lineWidth = 1;
-
-    for (let i = -2; i <= 2; i++) {
-        ctx.beginPath();
-
-        ctx.moveTo(
-            -obstacle.width * 0.45 +
-                i * 5,
-            -obstacle.height * 0.16
-        );
-
-        ctx.lineTo(
-            -obstacle.width * 0.45 +
-                i * 5,
-            obstacle.height * 0.16
-        );
-
-        ctx.stroke();
+        ctx.fillStyle = AVENMARK.dark;
 
         ctx.beginPath();
 
-        ctx.moveTo(
-            obstacle.width * 0.23 +
-                i * 5,
-            -obstacle.height * 0.16
-        );
-
-        ctx.lineTo(
-            obstacle.width * 0.23 +
-                i * 5,
-            obstacle.height * 0.16
-        );
-
-        ctx.stroke();
-    }
-
-    /* Main body */
-
-    ctx.fillStyle =
-        "#AAB4C7";
-
-    ctx.fillRect(
-        -obstacle.width * 0.18,
-        -obstacle.height * 0.28,
-        obstacle.width * 0.36,
-        obstacle.height * 0.56
-    );
-
-    /* Dish */
-
-    ctx.strokeStyle =
-        "#D7DFEF";
-
-    ctx.lineWidth = 2;
-
-    ctx.beginPath();
-
-    ctx.arc(
-        0,
-        -obstacle.height * 0.36,
-        obstacle.width * 0.16,
-        Math.PI,
-        Math.PI * 2
-    );
-
-    ctx.stroke();
-
-    /* Antenna */
-
-    ctx.beginPath();
-
-    ctx.moveTo(
-        0,
-        -obstacle.height * 0.35
-    );
-
-    ctx.lineTo(
-        0,
-        -obstacle.height * 0.52
-    );
-
-    ctx.stroke();
-
-    ctx.fillStyle =
-        "#FFFFFF";
-
-    ctx.beginPath();
-
-    ctx.arc(
-        0,
-        -obstacle.height * 0.55,
-        2,
-        0,
-        Math.PI * 2
-    );
-
-    ctx.fill();
-
-    ctx.restore();
-}
-
-
-/* =========================================================
-   SPACE ROCK
-   ========================================================= */
-
-function drawSpaceRock(obstacle) {
-    const cx =
-        obstacle.x +
-        obstacle.width / 2;
-
-    const cy =
-        obstacle.y +
-        obstacle.height / 2;
-
-    ctx.save();
-
-    ctx.translate(cx, cy);
-
-    ctx.rotate(
-        obstacle.rotation
-    );
-
-    ctx.fillStyle =
-        "#56647D";
-
-    ctx.beginPath();
-
-    ctx.moveTo(
-        0,
-        -obstacle.height / 2
-    );
-
-    ctx.lineTo(
-        obstacle.width * 0.42,
-        -obstacle.height * 0.2
-    );
-
-    ctx.lineTo(
-        obstacle.width * 0.35,
-        obstacle.height * 0.38
-    );
-
-    ctx.lineTo(
-        -obstacle.width * 0.08,
-        obstacle.height / 2
-    );
-
-    ctx.lineTo(
-        -obstacle.width * 0.48,
-        obstacle.height * 0.18
-    );
-
-    ctx.lineTo(
-        -obstacle.width * 0.38,
-        -obstacle.height * 0.32
-    );
-
-    ctx.closePath();
-
-    ctx.fill();
-
-    ctx.fillStyle =
-        "rgba(25,32,48,0.4)";
-
-    ctx.beginPath();
-
-    ctx.arc(
-        -obstacle.width * 0.15,
-        -obstacle.height * 0.12,
-        obstacle.width * 0.1,
-        0,
-        Math.PI * 2
-    );
-
-    ctx.fill();
-
-    ctx.restore();
-}
-
-
-/* =========================================================
-   COLLISION
-   ========================================================= */
-
-function checkCollisions() {
-    const playerBox =
-        player.getCollisionBox();
-
-    for (const obstacle of obstacles) {
-        const obstacleBox =
-            obstacle.getCollisionBox();
-
-        if (
-            rectanglesOverlap(
-                playerBox,
-                obstacleBox
-            )
-        ) {
-            endGame();
-
-            return;
-        }
-    }
-}
-
-
-function rectanglesOverlap(a, b) {
-    return (
-        a.x <
-            b.x + b.width &&
-        a.x + a.width >
-            b.x &&
-        a.y <
-            b.y + b.height &&
-        a.y + a.height >
-            b.y
-    );
-}
-
-
-/* =========================================================
-   PARTICLES
-   ========================================================= */
-
-function createParticle(
-    x,
-    y,
-    options = {}
-) {
-    particles.push({
-        x,
-        y,
-
-        velocityX:
-            options.velocityX ??
-            randomRange(-80, 80),
-
-        velocityY:
-            options.velocityY ??
-            randomRange(-120, -40),
-
-        life: 0,
-
-        maxLife:
-            options.maxLife ??
-            randomRange(0.3, 0.7),
-
-        size:
-            options.size ??
-            randomRange(1, 3),
-
-        gravity:
-            options.gravity ??
-            120,
-
-        alpha:
-            options.alpha ??
-            0.8,
-
-        type:
-            options.type ??
-            "star"
-    });
-}
-
-
-function updateParticles(deltaTime) {
-    for (
-        let i = particles.length - 1;
-        i >= 0;
-        i--
-    ) {
-        const particle =
-            particles[i];
-
-        particle.life += deltaTime;
-
-        particle.x +=
-            particle.velocityX *
-            deltaTime;
-
-        particle.y +=
-            particle.velocityY *
-            deltaTime;
-
-        particle.velocityY +=
-            particle.gravity *
-            deltaTime;
-
-        if (
-            particle.life >=
-            particle.maxLife
-        ) {
-            particles.splice(i, 1);
-        }
-    }
-}
-
-
-function drawParticles() {
-    for (const particle of particles) {
-        const lifeRatio =
-            particle.life /
-            particle.maxLife;
-
-        ctx.globalAlpha =
-            particle.alpha *
-            (1 - lifeRatio);
-
-        ctx.fillStyle =
-            "#FFFFFF";
-
-        ctx.beginPath();
-
-        ctx.arc(
-            particle.x,
-            particle.y,
-            particle.size,
+        ctx.ellipse(
+            x + ufo.width / 2,
+            y + 15,
+            ufo.width / 2,
+            10,
+            0,
             0,
             Math.PI * 2
         );
 
         ctx.fill();
-    }
 
-    ctx.globalAlpha = 1;
-}
+        /*
+         * UFO dome
+         */
 
+        ctx.fillStyle = AVENMARK.background;
 
-function createJumpParticles() {
-    for (let i = 0; i < 7; i++) {
-        createParticle(
-            player.x +
-                player.width * 0.5,
-            player.y +
-                player.height,
-
-            {
-                velocityX:
-                    randomRange(-80, 80),
-
-                velocityY:
-                    randomRange(
-                        -60,
-                        20
-                    ),
-
-                size:
-                    randomRange(
-                        1,
-                        2.5
-                    ),
-
-                maxLife:
-                    randomRange(
-                        0.25,
-                        0.5
-                    )
-            }
-        );
-    }
-}
-
-
-function createLandingParticles() {
-    for (let i = 0; i < 9; i++) {
-        createParticle(
-            player.x +
-                player.width * 0.5,
-            player.y +
-                player.height,
-
-            {
-                velocityX:
-                    randomRange(
-                        -100,
-                        100
-                    ),
-
-                velocityY:
-                    randomRange(
-                        -80,
-                        -25
-                    ),
-
-                size:
-                    randomRange(
-                        1,
-                        2.8
-                    ),
-
-                maxLife:
-                    randomRange(
-                        0.25,
-                        0.55
-                    )
-            }
-        );
-    }
-}
-
-
-function createPassParticles() {
-    const obstacle =
-        obstacles.find(
-            item => item.passed
-        );
-
-    if (!obstacle) {
-        return;
-    }
-
-    for (let i = 0; i < 3; i++) {
-        createParticle(
-            player.x,
-            player.y +
-                player.height * 0.35,
-
-            {
-                velocityX:
-                    randomRange(
-                        -20,
-                        30
-                    ),
-
-                velocityY:
-                    randomRange(
-                        -60,
-                        10
-                    ),
-
-                size:
-                    randomRange(
-                        1,
-                        2
-                    ),
-
-                maxLife:
-                    0.35
-            }
-        );
-    }
-}
-
-
-function createCrashParticles() {
-    const centerX =
-        player.x +
-        player.width / 2;
-
-    const centerY =
-        player.y +
-        player.height / 2;
-
-    for (let i = 0; i < 28; i++) {
-        createParticle(
-            centerX,
-            centerY,
-
-            {
-                velocityX:
-                    randomRange(
-                        -260,
-                        260
-                    ),
-
-                velocityY:
-                    randomRange(
-                        -280,
-                        100
-                    ),
-
-                gravity: 420,
-
-                size:
-                    randomRange(
-                        1,
-                        4
-                    ),
-
-                maxLife:
-                    randomRange(
-                        0.45,
-                        1.1
-                    ),
-
-                alpha: 0.9
-            }
-        );
-    }
-}
-
-
-/* =========================================================
-   AVI
-   ========================================================= */
-
-function drawAvi(
-    centerX,
-    centerY,
-    squash,
-    stretch
-) {
-    ctx.save();
-
-    ctx.translate(
-        centerX,
-        centerY
-    );
-
-    ctx.scale(
-        squash,
-        stretch
-    );
-
-    const bodyWidth = 29;
-    const bodyHeight = 37;
-
-    const helmetRadius = 19;
-
-    /* Backpack */
-
-    ctx.fillStyle =
-        "#AAB5C8";
-
-    roundRect(
-        -bodyWidth * 0.62,
-        -4,
-        8,
-        27,
-        4
-    );
-
-    ctx.fill();
-
-    /* Helmet outer shell */
-
-    ctx.fillStyle =
-        "#DCE4F1";
-
-    ctx.beginPath();
-
-    ctx.arc(
-        0,
-        -22,
-        helmetRadius,
-        0,
-        Math.PI * 2
-    );
-
-    ctx.fill();
-
-    /* Helmet dark visor */
-
-    ctx.fillStyle =
-        "#17243C";
-
-    ctx.beginPath();
-
-    ctx.ellipse(
-        0,
-        -21,
-        14,
-        11,
-        0,
-        0,
-        Math.PI * 2
-    );
-
-    ctx.fill();
-
-    /* Visor reflection */
-
-    ctx.fillStyle =
-        "rgba(255,255,255,0.28)";
-
-    ctx.beginPath();
-
-    ctx.ellipse(
-        -4,
-        -25,
-        5,
-        3,
-        -0.35,
-        0,
-        Math.PI * 2
-    );
-
-    ctx.fill();
-
-    /* Body suit */
-
-    ctx.fillStyle =
-        "#EEF2F8";
-
-    roundRect(
-        -bodyWidth / 2,
-        -3,
-        bodyWidth,
-        bodyHeight,
-        9
-    );
-
-    ctx.fill();
-
-    /* Chest panel */
-
-    ctx.fillStyle =
-        "#334765";
-
-    roundRect(
-        -9,
-        5,
-        18,
-        11,
-        3
-    );
-
-    ctx.fill();
-
-    /* Avenmark chest mark */
-
-    ctx.fillStyle =
-        "#FFFFFF";
-
-    ctx.fillRect(
-        -4,
-        8,
-        8,
-        2
-    );
-
-    ctx.fillRect(
-        -2,
-        6,
-        2,
-        7
-    );
-
-    /* Left arm */
-
-    ctx.fillStyle =
-        "#D7DFEB";
-
-    if (player.runFrame === 0) {
-        roundRect(
-            -21,
-            1,
-            9,
-            24,
-            4
-        );
-    } else {
-        roundRect(
-            -20,
-            4,
-            9,
-            21,
-            4
-        );
-    }
-
-    ctx.fill();
-
-    /* Right arm */
-
-    if (player.runFrame === 0) {
-        roundRect(
-            12,
-            4,
-            9,
-            21,
-            4
-        );
-    } else {
-        roundRect(
-            12,
-            1,
-            9,
-            24,
-            4
-        );
-    }
-
-    ctx.fill();
-
-    /* Legs */
-
-    ctx.fillStyle =
-        "#D4DDEA";
-
-    if (player.runFrame === 0) {
-        roundRect(
-            -12,
-            27,
-            9,
-            18,
-            4
-        );
-
-        roundRect(
-            4,
-            28,
-            9,
-            16,
-            4
-        );
-    } else {
-        roundRect(
-            -12,
-            29,
-            9,
-            15,
-            4
-        );
-
-        roundRect(
-            4,
-            27,
-            9,
-            18,
-            4
-        );
-    }
-
-    ctx.fill();
-
-    /* Boots */
-
-    ctx.fillStyle =
-        "#66748B";
-
-    roundRect(
-        -14,
-        41,
-        12,
-        5,
-        2
-    );
-
-    ctx.fill();
-
-    roundRect(
-        3,
-        41,
-        12,
-        5,
-        2
-    );
-
-    ctx.fill();
-
-    /* Helmet outline */
-
-    ctx.strokeStyle =
-        "rgba(255,255,255,0.65)";
-
-    ctx.lineWidth = 1.4;
-
-    ctx.beginPath();
-
-    ctx.arc(
-        0,
-        -22,
-        helmetRadius,
-        0,
-        Math.PI * 2
-    );
-
-    ctx.stroke();
-
-    /* Tiny helmet light */
-
-    ctx.fillStyle =
-        "#FFFFFF";
-
-    ctx.beginPath();
-
-    ctx.arc(
-        13,
-        -28,
-        1.5,
-        0,
-        Math.PI * 2
-    );
-
-    ctx.fill();
-
-    ctx.restore();
-}
-
-
-/* =========================================================
-   GROUND / HORIZON
-   ========================================================= */
-
-function drawGround() {
-    const groundY =
-        canvasHeight -
-        GAME.GROUND_HEIGHT;
-
-    /* Main horizon */
-
-    ctx.strokeStyle =
-        "rgba(255,255,255,0.18)";
-
-    ctx.lineWidth = 1;
-
-    ctx.beginPath();
-
-    ctx.moveTo(
-        0,
-        groundY
-    );
-
-    ctx.lineTo(
-        canvasWidth,
-        groundY
-    );
-
-    ctx.stroke();
-
-    /* Horizon glow */
-
-    const glow =
-        ctx.createLinearGradient(
-            0,
-            groundY - 15,
-            0,
-            groundY + 20
-        );
-
-    glow.addColorStop(
-        0,
-        "rgba(255,255,255,0.07)"
-    );
-
-    glow.addColorStop(
-        1,
-        "rgba(255,255,255,0)"
-    );
-
-    ctx.fillStyle = glow;
-
-    ctx.fillRect(
-        0,
-        groundY - 15,
-        canvasWidth,
-        35
-    );
-
-    /* Moving surface marks */
-
-    ctx.strokeStyle =
-        "rgba(255,255,255,0.08)";
-
-    ctx.lineWidth = 1;
-
-    const spacing = 55;
-
-    const offset =
-        groundOffset %
-        spacing;
-
-    for (
-        let x = -spacing + offset;
-        x < canvasWidth + spacing;
-        x += spacing
-    ) {
         ctx.beginPath();
 
-        ctx.moveTo(
-            x,
-            groundY + 12
+        ctx.ellipse(
+            x + ufo.width / 2,
+            y + 10,
+            14,
+            9,
+            0,
+            Math.PI,
+            Math.PI * 2
         );
 
-        ctx.lineTo(
-            x + 22,
-            groundY + 12
-        );
+        ctx.fill();
 
-        ctx.stroke();
-    }
+        /*
+         * Copper light
+         */
 
-    /* Lower subtle lines */
+        ctx.fillStyle = AVENMARK.copper;
 
-    ctx.strokeStyle =
-        "rgba(255,255,255,0.035)";
-
-    for (
-        let y = groundY + 28;
-        y < canvasHeight;
-        y += 15
-    ) {
         ctx.beginPath();
 
-        ctx.moveTo(
+        ctx.arc(
+            x + ufo.width / 2,
+            y + 17,
+            3,
             0,
-            y
+            Math.PI * 2
         );
 
-        ctx.lineTo(
-            canvasWidth,
-            y
-        );
+        ctx.fill();
 
-        ctx.stroke();
-    }
-}
+        /*
+         * Tiny side lights
+         */
 
+        ctx.fillStyle = AVENMARK.copper;
 
-/* =========================================================
-   BACKGROUND
-   ========================================================= */
+        ctx.beginPath();
 
-function drawBackground() {
-    const gradient =
-        ctx.createLinearGradient(
+        ctx.arc(
+            x + 13,
+            y + 15,
+            2,
             0,
+            Math.PI * 2
+        );
+
+        ctx.arc(
+            x + ufo.width - 13,
+            y + 15,
+            2,
             0,
-            0,
-            canvasHeight
+            Math.PI * 2
         );
 
-    gradient.addColorStop(
-        0,
-        "#070B19"
-    );
+        ctx.fill();
 
-    gradient.addColorStop(
-        0.55,
-        "#0B1328"
-    );
-
-    gradient.addColorStop(
-        1,
-        "#050813"
-    );
-
-    ctx.fillStyle =
-        gradient;
-
-    ctx.fillRect(
-        0,
-        0,
-        canvasWidth,
-        canvasHeight
-    );
-
-    /* Soft central glow */
-
-    const glow =
-        ctx.createRadialGradient(
-            canvasWidth * 0.53,
-            canvasHeight * 0.38,
-            0,
-            canvasWidth * 0.53,
-            canvasHeight * 0.38,
-            canvasWidth * 0.7
-        );
-
-    glow.addColorStop(
-        0,
-        "rgba(50,72,120,0.18)"
-    );
-
-    glow.addColorStop(
-        1,
-        "rgba(50,72,120,0)"
-    );
-
-    ctx.fillStyle =
-        glow;
-
-    ctx.fillRect(
-        0,
-        0,
-        canvasWidth,
-        canvasHeight
-    );
-}
-
-
-/* =========================================================
-   DRAW
-   ========================================================= */
-
-function draw() {
-    if (!canvasWidth || !canvasHeight) {
-        return;
+        ctx.restore();
     }
 
-    ctx.clearRect(
-        0,
-        0,
-        canvasWidth,
-        canvasHeight
-    );
 
-    drawBackground();
+    /* ======================================================
+       STARS
+    ====================================================== */
 
-    drawBackgroundObjects();
+    const stars = [];
 
-    drawStars();
+    function createStars() {
+        stars.length = 0;
 
-    drawShootingStars();
+        const count =
+            Math.max(
+                20,
+                Math.floor(width() / 42)
+            );
 
-    drawGround();
-
-    drawObstacles();
-
-    player.draw();
-
-    drawParticles();
-
-    drawMissionProgress();
-}
-
-
-/* =========================================================
-   MISSION PROGRESS
-   ========================================================= */
-
-function drawMissionProgress() {
-    const barWidth =
-        Math.min(
-            150,
-            canvasWidth * 0.22
-        );
-
-    const barHeight = 2;
-
-    const x =
-        canvasWidth -
-        barWidth -
-        20;
-
-    const y =
-        canvasHeight -
-        GAME.GROUND_HEIGHT +
-        31;
-
-    ctx.fillStyle =
-        "rgba(255,255,255,0.08)";
-
-    ctx.fillRect(
-        x,
-        y,
-        barWidth,
-        barHeight
-    );
-
-    const progress =
-        Math.min(
-            1,
-            elapsedTime / 60
-        );
-
-    ctx.fillStyle =
-        "rgba(255,255,255,0.32)";
-
-    ctx.fillRect(
-        x,
-        y,
-        barWidth * progress,
-        barHeight
-    );
-}
-
-
-/* =========================================================
-   INPUT
-   ========================================================= */
-
-function handleJumpInput(event) {
-    if (event) {
-        event.preventDefault();
-    }
-
-    if (gameState === GameState.READY) {
-        startGame();
-
-        return;
-    }
-
-    if (gameState === GameState.GAME_OVER) {
-        startGame();
-
-        return;
-    }
-
-    if (gameState === GameState.PAUSED) {
-        resumeGame();
-
-        return;
-    }
-
-    player.jump();
-}
-
-
-/* =========================================================
-   KEYBOARD INPUT
-   ========================================================= */
-
-window.addEventListener(
-    "keydown",
-    event => {
-        const key =
-            event.key.toLowerCase();
-
-        if (
-            key === " " ||
-            key === "arrowup" ||
-            key === "w"
-        ) {
-            event.preventDefault();
-
-            handleJumpInput(event);
-
-            return;
+        for (let i = 0; i < count; i++) {
+            stars.push({
+                x: Math.random() * width(),
+                y: Math.random() * Math.max(150, groundY() * 0.72),
+                size: random(0.7, 1.6),
+                alpha: random(0.35, 0.8),
+                speed: random(0.04, 0.12)
+            });
         }
+    }
 
-        if (key === "p") {
-            event.preventDefault();
+    function updateStars(delta) {
+        for (const star of stars) {
+            star.x -= star.speed * gameSpeed * delta;
 
-            if (
-                gameState ===
-                GameState.RUNNING
-            ) {
-                pauseGame();
-            } else if (
-                gameState ===
-                GameState.PAUSED
-            ) {
-                resumeGame();
-            }
-
-            return;
-        }
-
-        if (key === "escape") {
-            if (
-                gameState ===
-                GameState.RUNNING
-            ) {
-                pauseGame();
+            if (star.x < -5) {
+                star.x = width() + 5;
+                star.y =
+                    Math.random() *
+                    Math.max(150, groundY() * 0.72);
             }
         }
-    },
-    {
-        passive: false
     }
-);
 
+    function drawStars() {
+        for (const star of stars) {
+            ctx.globalAlpha = star.alpha;
 
-/* =========================================================
-   TOUCH / POINTER INPUT
-   ========================================================= */
+            ctx.fillStyle = AVENMARK.copper;
 
-touchJump.addEventListener(
-    "pointerdown",
-    event => {
-        event.preventDefault();
+            ctx.beginPath();
 
-        handleJumpInput(event);
-    },
-    {
-        passive: false
-    }
-);
+            ctx.arc(
+                star.x,
+                star.y,
+                star.size,
+                0,
+                Math.PI * 2
+            );
 
-
-canvas.addEventListener(
-    "pointerdown",
-    event => {
-        if (
-            event.pointerType ===
-            "touch"
-        ) {
-            event.preventDefault();
-
-            handleJumpInput(event);
+            ctx.fill();
         }
-    },
-    {
-        passive: false
+
+        ctx.globalAlpha = 1;
     }
-);
 
 
-/* =========================================================
-   BUTTON EVENTS
-   ========================================================= */
+    /* ======================================================
+       500 POINT MESSAGE
+    ====================================================== */
 
-startButton.addEventListener(
-    "click",
-    startGame
-);
+    let lastMilestone = 0;
+    let milestoneMessage = "";
+    let milestoneTimer = 0;
 
-restartButton.addEventListener(
-    "click",
-    startGame
-);
+    function checkMilestone() {
+        const milestone =
+            Math.floor(score / 500) * 500;
 
-resumeButton.addEventListener(
-    "click",
-    resumeGame
-);
+        if (
+            milestone >= 500 &&
+            milestone > lastMilestone
+        ) {
+            lastMilestone = milestone;
+
+            milestoneMessage =
+                "Continue plz :)";
+
+            milestoneTimer = 180;
+
+            playScoreSound();
+        }
+    }
+
+    function drawMilestone() {
+        if (milestoneTimer <= 0) return;
+
+        milestoneTimer--;
+
+        const fade =
+            milestoneTimer < 35
+                ? milestoneTimer / 35
+                : 1;
+
+        ctx.save();
+
+        ctx.globalAlpha = fade;
+
+        ctx.font =
+            '600 15px "Montserrat", sans-serif';
+
+        ctx.textAlign = "center";
+
+        ctx.fillStyle = AVENMARK.copper;
+
+        ctx.fillText(
+            milestoneMessage,
+            width() / 2,
+            48
+        );
+
+        ctx.restore();
+    }
 
 
-/* =========================================================
-   WINDOW EVENTS
-   ========================================================= */
+    /* ======================================================
+       BACKGROUND
+    ====================================================== */
 
-window.addEventListener(
-    "resize",
-    () => {
-        resizeCanvas();
+    function drawBackground() {
+        ctx.fillStyle = AVENMARK.background;
+
+        ctx.fillRect(
+            0,
+            0,
+            width(),
+            height()
+        );
+
+        drawStars();
+    }
+
+
+    /* ======================================================
+       SCORE
+    ====================================================== */
+
+    function updateScore(delta) {
+        scoreAccumulator += delta;
+
+        /*
+         * Score rises steadily rather than being
+         * tied to frame rate.
+         */
+
+        if (scoreAccumulator >= 1) {
+            const points =
+                Math.floor(scoreAccumulator);
+
+            score += points;
+
+            scoreAccumulator -= points;
+
+            checkMilestone();
+
+            updateScoreDisplay();
+        }
+    }
+
+    function updateScoreDisplay() {
+        if (scoreElement) {
+            scoreElement.textContent =
+                String(score).padStart(5, "0");
+        }
+
+        if (highScoreElement) {
+            highScoreElement.textContent =
+                String(highScore).padStart(5, "0");
+        }
+
+        if (gameOverScore) {
+            gameOverScore.textContent =
+                String(score).padStart(5, "0");
+        }
+    }
+
+
+    /* ======================================================
+       COLLISION
+    ====================================================== */
+
+    function getAviHitbox() {
+        return {
+            x: avi.x + 9,
+            y: avi.y + 5,
+            width: 37,
+            height: 59
+        };
+    }
+
+    function getUFOHitbox(ufo) {
+        return {
+            x: ufo.x + 5,
+            y: ufo.y + 4,
+            width: ufo.width - 10,
+            height: 20
+        };
+    }
+
+    function intersects(a, b) {
+        return (
+            a.x < b.x + b.width &&
+            a.x + a.width > b.x &&
+            a.y < b.y + b.height &&
+            a.y + a.height > b.y
+        );
+    }
+
+    function checkCollisions() {
+        const aviBox =
+            getAviHitbox();
+
+        for (const ufo of ufos) {
+            if (
+                intersects(
+                    aviBox,
+                    getUFOHitbox(ufo)
+                )
+            ) {
+                endGame();
+                return;
+            }
+        }
+    }
+
+
+    /* ======================================================
+       OBSTACLE SPAWNING
+    ====================================================== */
+
+    function updateObstacleSpawner(delta) {
+        nextObstacleDistance -=
+            gameSpeed * delta;
+
+        if (nextObstacleDistance <= 0) {
+            createUFO();
+
+            /*
+             * Keep UFOs comfortably spaced.
+             * Difficulty increases gradually through speed,
+             * not by filling the screen.
+             */
+
+            const difficulty =
+                clamp(score / 5000, 0, 1);
+
+            nextObstacleDistance =
+                random(
+                    470 - difficulty * 60,
+                    720 - difficulty * 80
+                );
+        }
+    }
+
+
+    /* ======================================================
+       GAME STATE
+    ====================================================== */
+
+    function startGame() {
+        initializeAudio();
+
+        if (
+            audioContext &&
+            audioContext.state === "suspended"
+        ) {
+            audioContext.resume();
+        }
+
+        running = true;
+        paused = false;
+        gameOver = false;
+
+        if (startScreen) {
+            startScreen.classList.add("hidden");
+        }
+
+        if (gameOverScreen) {
+            gameOverScreen.classList.add("hidden");
+        }
+
+        resetGameState();
+
+        if (!animationFrame) {
+            lastTime = performance.now();
+
+            animationFrame =
+                requestAnimationFrame(loop);
+        }
+    }
+
+    function resetGameState() {
+        score = 0;
+        scoreAccumulator = 0;
+
+        lastMilestone = 0;
+        milestoneMessage = "";
+        milestoneTimer = 0;
+
+        nextObstacleDistance =
+            WORLD.startingDistance;
+
+        ufos.length = 0;
+
+        gameSpeed =
+            WORLD.baseSpeed *
+            speedMultiplier;
+
+        avi.reset();
+
+        terrain.reset();
 
         createStars();
-        createBackgroundObjects();
 
-        draw();
+        updateScoreDisplay();
     }
-);
 
+    function resetGame() {
+        running = true;
+        paused = false;
+        gameOver = false;
 
-/* =========================================================
-   VISIBILITY / TAB PAUSING
-   ========================================================= */
+        if (startScreen) {
+            startScreen.classList.add("hidden");
+        }
 
-document.addEventListener(
-    "visibilitychange",
-    () => {
-        if (
-            document.hidden &&
-            gameState ===
-            GameState.RUNNING
-        ) {
-            pauseGame();
+        if (gameOverScreen) {
+            gameOverScreen.classList.add("hidden");
+        }
+
+        resetGameState();
+
+        playTone(
+            440,
+            0.06,
+            "sine",
+            0.014
+        );
+    }
+
+    function endGame() {
+        running = false;
+        paused = false;
+        gameOver = true;
+
+        if (score > highScore) {
+            highScore = score;
+
+            localStorage.setItem(
+                "avenmarkAviHighScore",
+                String(highScore)
+            );
+        }
+
+        updateScoreDisplay();
+
+        if (gameOverScreen) {
+            gameOverScreen.classList.remove("hidden");
+        }
+
+        playGameOverSound();
+    }
+
+    function togglePause() {
+        if (!running && !paused) return;
+
+        paused = !paused;
+
+        if (pauseButton) {
+            pauseButton.textContent =
+                paused ? "Resume" : "Pause";
         }
     }
-);
 
 
-/* =========================================================
-   UTILITIES
-   ========================================================= */
+    /* ======================================================
+       GAME UPDATE
+    ====================================================== */
 
-function randomRange(min, max) {
-    return (
-        Math.random() *
-            (max - min) +
-        min
+    function update(delta) {
+        if (!running || paused || gameOver) {
+            return;
+        }
+
+        gameSpeed =
+            WORLD.baseSpeed *
+            speedMultiplier;
+
+        updateScore(delta);
+
+        avi.update(delta);
+
+        terrain.update(delta);
+
+        updateStars(delta);
+
+        updateUFOs(delta);
+
+        updateObstacleSpawner(delta);
+
+        checkCollisions();
+    }
+
+
+    /* ======================================================
+       DRAW
+    ====================================================== */
+
+    function draw() {
+        drawBackground();
+
+        terrain.draw();
+
+        for (const ufo of ufos) {
+            drawUFO(ufo);
+        }
+
+        avi.draw();
+
+        drawMilestone();
+    }
+
+
+    /* ======================================================
+       MAIN LOOP
+    ====================================================== */
+
+    function loop(timestamp) {
+        animationFrame = null;
+
+        let delta =
+            (timestamp - lastTime) / 16.6667;
+
+        lastTime = timestamp;
+
+        /*
+         * Prevent a giant physics jump after the
+         * browser tab has been backgrounded.
+         */
+
+        delta = clamp(delta, 0, 2);
+
+        update(delta);
+
+        draw();
+
+        animationFrame =
+            requestAnimationFrame(loop);
+    }
+
+
+    /* ======================================================
+       INPUT
+    ====================================================== */
+
+    function handleJump(event) {
+        /*
+         * Do not hijack buttons or sliders.
+         */
+
+        if (
+            event.target &&
+            (
+                event.target.tagName === "BUTTON" ||
+                event.target.tagName === "INPUT"
+            )
+        ) {
+            return;
+        }
+
+        if (
+            event.code === "Space" ||
+            event.code === "ArrowUp" ||
+            event.type === "pointerdown"
+        ) {
+            event.preventDefault();
+
+            if (!running && !gameOver) {
+                startGame();
+                return;
+            }
+
+            if (gameOver) {
+                resetGame();
+                return;
+            }
+
+            avi.jump();
+        }
+    }
+
+    document.addEventListener(
+        "keydown",
+        handleJump
     );
-}
+
+    canvas.addEventListener(
+        "pointerdown",
+        handleJump
+    );
 
 
-function roundRect(
-    x,
-    y,
-    width,
-    height,
-    radius
-) {
-    const r =
-        Math.min(
-            radius,
-            width / 2,
-            height / 2
+    /* ======================================================
+       PAUSE
+    ====================================================== */
+
+    if (pauseButton) {
+        pauseButton.addEventListener(
+            "click",
+            () => {
+                togglePause();
+            }
+        );
+    }
+
+
+    /* ======================================================
+       RESET
+    ====================================================== */
+
+    if (resetButton) {
+        resetButton.addEventListener(
+            "click",
+            () => {
+                resetGame();
+            }
+        );
+    }
+
+
+    /* ======================================================
+       START
+    ====================================================== */
+
+    if (startButton) {
+        startButton.addEventListener(
+            "click",
+            () => {
+                startGame();
+            }
+        );
+    }
+
+
+    /* ======================================================
+       RESTART
+    ====================================================== */
+
+    if (restartButton) {
+        restartButton.addEventListener(
+            "click",
+            () => {
+                resetGame();
+            }
+        );
+    }
+
+
+    /* ======================================================
+       SPEED SLIDER
+    ====================================================== */
+
+    if (speedSlider) {
+        /*
+         * Normal speed is the default.
+         * Only a modest amount of slowdown is allowed.
+         */
+
+        speedSlider.value = "1";
+
+        speedSlider.addEventListener(
+            "input",
+            () => {
+                speedMultiplier =
+                    clamp(
+                        Number(speedSlider.value),
+                        WORLD.minSpeedMultiplier,
+                        WORLD.maxSpeedMultiplier
+                    );
+
+                gameSpeed =
+                    WORLD.baseSpeed *
+                    speedMultiplier;
+            }
+        );
+    }
+
+
+    /* ======================================================
+       SOUND TOGGLE
+    ====================================================== */
+
+    if (soundToggle) {
+        soundEnabled =
+            soundToggle.checked !== false;
+
+        soundToggle.addEventListener(
+            "change",
+            () => {
+                soundEnabled =
+                    soundToggle.checked;
+            }
+        );
+    }
+
+
+    /* ======================================================
+       MOBILE / TOUCH
+    ====================================================== */
+
+    document.addEventListener(
+        "touchstart",
+        event => {
+            if (
+                event.target === canvas
+            ) {
+                event.preventDefault();
+            }
+        },
+        { passive: false }
+    );
+
+
+    /* ======================================================
+       UTILITY: ROUNDED RECTANGLE
+    ====================================================== */
+
+    function roundRect(
+        context,
+        x,
+        y,
+        width,
+        height,
+        radius
+    ) {
+        const r =
+            Math.min(
+                radius,
+                width / 2,
+                height / 2
+            );
+
+        context.beginPath();
+
+        context.moveTo(
+            x + r,
+            y
         );
 
-    ctx.beginPath();
+        context.arcTo(
+            x + width,
+            y,
+            x + width,
+            y + height,
+            r
+        );
 
-    ctx.moveTo(
-        x + r,
-        y
-    );
+        context.arcTo(
+            x + width,
+            y + height,
+            x,
+            y + height,
+            r
+        );
 
-    ctx.arcTo(
-        x + width,
-        y,
-        x + width,
-        y + height,
-        r
-    );
+        context.arcTo(
+            x,
+            y + height,
+            x,
+            y,
+            r
+        );
 
-    ctx.arcTo(
-        x + width,
-        y + height,
-        x,
-        y + height,
-        r
-    );
+        context.arcTo(
+            x,
+            y,
+            x + width,
+            y,
+            r
+        );
 
-    ctx.arcTo(
-        x,
-        y + height,
-        x,
-        y,
-        r
-    );
-
-    ctx.arcTo(
-        x,
-        y,
-        x + width,
-        y,
-        r
-    );
-
-    ctx.closePath();
-}
+        context.closePath();
+    }
 
 
-/* =========================================================
-   INITIALIZE
-   ========================================================= */
+    /* ======================================================
+       INITIALIZATION
+    ====================================================== */
 
-initialize();
+    function initialize() {
+        resizeCanvas();
+
+        avi.reset();
+
+        terrain.reset();
+
+        createStars();
+
+        updateScoreDisplay();
+
+        draw();
+
+        /*
+         * The game itself waits for the user's first action.
+         * This keeps audio/browser autoplay policies happy.
+         */
+
+        running = false;
+        paused = false;
+        gameOver = false;
+    }
+
+    initialize();
+
+})();
