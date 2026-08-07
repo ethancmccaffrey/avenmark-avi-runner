@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
-    <meta name="theme-color" content="#F5F5F2">
+    <meta name="theme-color" content="#0B1929">
     <title>Avenmark Avi Runner</title>
 
     <link rel="preconnect" href="https://fonts.googleapis.com">
@@ -12,132 +12,252 @@
 
     <link rel="stylesheet" href="style.css">
 </head>
-<body>
+<body class="game-container">
 
-<header class="app-header">
-    <div class="brand">
-        <img src="AVA.png" alt="Avenmark" class="logo">
-        <div class="brand-copy">
-            <h1>Avenmark Avi Runner</h1>
-        </div>
-    </div>
-
-    <div class="header-controls">
-        <button id="pause-button" class="control-button" type="button" aria-label="Pause game">
-            Pause
-        </button>
-
-        <button id="reset-button" class="control-button" type="button" aria-label="Reset game">
-            Reset
-        </button>
-    </div>
-</header>
-
-<main class="runner-shell">
-    <section class="game-card" aria-label="Avenmark Avi Runner game">
-
-        <div class="game-area">
-            <canvas id="game-canvas" aria-label="Avenmark Avi Runner canvas"></canvas>
-
-            <!-- Start screen -->
-            <div id="start-screen" class="game-message active">
-                <div class="message-inner">
-                    <span class="message-kicker">AVENMARK</span>
-                    <h2>Avi is ready.</h2>
-                    <p>Jump, keep pace, and don’t let the terrain win.</p>
-                    <button id="start-button" class="primary-button" type="button">
-                        Start
-                    </button>
-                </div>
+    <!-- ============================================
+         HEADER / BRANDING
+         ============================================ -->
+    <header class="app-header" role="banner">
+        <div class="brand">
+            <img src="AVA.png" alt="Avenmark" class="logo">
+            <div class="brand-copy">
+                <h1>Avenmark Avi Runner</h1>
+                <p class="brand-tagline">Escape the Moon</p>
             </div>
+        </div>
 
-            <!-- Rocket intro layer for the launch animation -->
-            <div id="rocket-intro" class="rocket-intro hidden" aria-hidden="true">
-                <div class="rocket-scene">
-                    <div class="rocket" aria-hidden="true">
-                        <div class="rocket-window"></div>
-                        <div class="rocket-fin rocket-fin-left"></div>
-                        <div class="rocket-fin rocket-fin-right"></div>
+        <div class="header-controls">
+            <button id="pause-button" class="control-button" type="button" aria-label="Pause game">
+                <span class="icon">⏸</span>
+                <span>Pause</span>
+            </button>
+
+            <button id="reset-button" class="control-button" type="button" aria-label="Reset game">
+                <span class="icon">↻</span>
+                <span>Reset</span>
+            </button>
+        </div>
+    </header>
+
+    <!-- ============================================
+         MAIN GAME AREA
+         ============================================ -->
+    <main class="runner-shell" role="main">
+        <section class="game-card" aria-label="Avenmark Avi Runner game area">
+
+            <!-- Game Canvas -->
+            <div class="game-viewport">
+                <canvas 
+                    id="game-canvas" 
+                    class="game-canvas"
+                    aria-label="Game canvas - Avi running on the moon"
+                    role="img"
+                >
+                </canvas>
+
+                <!-- Game Background Layer (for parallax effects) -->
+                <div id="background-layer" class="background-layer" aria-hidden="true"></div>
+
+                <!-- ========================================
+                     SCREEN OVERLAYS
+                     ======================================== -->
+
+                <!-- Start Screen -->
+                <div id="start-screen" class="screen-overlay active" role="dialog" aria-labelledby="start-title">
+                    <div class="screen-content">
+                        <div class="screen-header">
+                            <span class="screen-badge">MISSION READY</span>
+                            <h2 id="start-title">Avi is ready.</h2>
+                        </div>
+                        <p class="screen-description">
+                            Jump, dodge UFOs, and collect rocket powerups. 
+                            Keep pace and don't let the lunar terrain win.
+                        </p>
+                        <button id="start-button" class="primary-button" type="button" aria-pressed="false">
+                            <span class="button-text">Launch Mission</span>
+                            <span class="button-icon">→</span>
+                        </button>
+                        <p class="screen-hint">Press SPACE or TAP to start</p>
                     </div>
-                    <div class="launch-trail" aria-hidden="true"></div>
+                </div>
+
+                <!-- Pause Screen -->
+                <div id="pause-screen" class="screen-overlay hidden" role="dialog" aria-labelledby="pause-title" aria-hidden="true">
+                    <div class="screen-content">
+                        <div class="screen-header">
+                            <span class="screen-badge">PAUSED</span>
+                            <h2 id="pause-title">Take a breath.</h2>
+                        </div>
+                        <p class="screen-description">Your mission is suspended.</p>
+                        <button id="resume-button" class="primary-button" type="button">
+                            <span class="button-text">Resume</span>
+                            <span class="button-icon">→</span>
+                        </button>
+                    </div>
+                </div>
+
+                <!-- Game Over Screen -->
+                <div id="game-over-screen" class="screen-overlay hidden" role="dialog" aria-labelledby="gameover-title" aria-hidden="true">
+                    <div class="screen-content">
+                        <div class="screen-header">
+                            <span class="screen-badge">MISSION FAILED</span>
+                            <h2 id="gameover-title">Is that all you got?</h2>
+                        </div>
+                        <div class="score-display">
+                            <div class="score-item">
+                                <span class="score-label">Final Score</span>
+                                <p id="final-score" class="score-value">0</p>
+                            </div>
+                            <div class="score-item">
+                                <span class="score-label">Personal Best</span>
+                                <p id="final-high-score" class="score-value">0</p>
+                            </div>
+                        </div>
+                        <button id="restart-button" class="primary-button" type="button">
+                            <span class="button-text">Run Again</span>
+                            <span class="button-icon">→</span>
+                        </button>
+                    </div>
+                </div>
+
+                <!-- Rocket Launch Intro -->
+                <div id="rocket-intro" class="rocket-intro hidden" aria-hidden="true" role="presentation">
+                    <div class="rocket-scene">
+                        <!-- Rocket body -->
+                        <div class="rocket" aria-hidden="true">
+                            <!-- Nose cone -->
+                            <div class="rocket-nose"></div>
+                            
+                            <!-- Main body with details -->
+                            <div class="rocket-body">
+                                <div class="rocket-window-section">
+                                    <div class="rocket-window"></div>
+                                </div>
+                                <div class="rocket-stripe rocket-stripe-1"></div>
+                                <div class="rocket-stripe rocket-stripe-2"></div>
+                                <div class="rocket-stripe rocket-stripe-3"></div>
+                            </div>
+
+                            <!-- Fins -->
+                            <div class="rocket-fin rocket-fin-left"></div>
+                            <div class="rocket-fin rocket-fin-right"></div>
+
+                            <!-- Landing legs -->
+                            <div class="rocket-leg rocket-leg-left"></div>
+                            <div class="rocket-leg rocket-leg-right"></div>
+                        </div>
+
+                        <!-- Launch pad -->
+                        <div class="launch-pad" aria-hidden="true"></div>
+
+                        <!-- Launch flame/trail -->
+                        <div class="launch-trail" aria-hidden="true">
+                            <div class="flame"></div>
+                            <div class="flame"></div>
+                            <div class="flame"></div>
+                        </div>
+
+                        <!-- Launch text -->
+                        <div class="launch-text" aria-hidden="true">
+                            <p>LAUNCHING...</p>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Continue Prompt -->
+                <div id="continue-message" class="continue-message" aria-live="polite" aria-hidden="true">
+                    <span>Press SPACE or TAP to continue</span>
                 </div>
             </div>
 
-            <!-- Pause screen -->
-            <div id="pause-screen" class="game-message hidden" aria-hidden="true">
-                <div class="message-inner">
-                    <span class="message-kicker">PAUSED</span>
-                    <h2>Take a breath.</h2>
-                    <button id="resume-button" class="primary-button" type="button">
-                        Resume
+            <!-- ========================================
+                 CONTROL PANEL / HUD
+                 ======================================== -->
+            <aside class="control-panel" aria-label="Game controls and statistics">
+                
+                <!-- Score Section -->
+                <div class="panel-section score-group">
+                    <div class="section-header">
+                        <span class="section-icon">◎</span>
+                        <span class="section-label">Score</span>
+                    </div>
+                    <output id="score-display" class="score-value" aria-live="polite">0</output>
+                </div>
+
+                <!-- High Score Section -->
+                <div class="panel-section highscore-group">
+                    <div class="section-header">
+                        <span class="section-icon">★</span>
+                        <span class="section-label">Personal Best</span>
+                    </div>
+                    <output id="high-score-display" class="score-value" aria-live="polite">0</output>
+                </div>
+
+                <!-- Level/Distance Section -->
+                <div class="panel-section distance-group">
+                    <div class="section-header">
+                        <span class="section-icon">→</span>
+                        <span class="section-label">Distance</span>
+                    </div>
+                    <output id="distance-display" class="score-value" aria-live="polite">0m</output>
+                </div>
+
+                <!-- Speed Control Section -->
+                <div class="panel-section speed-group">
+                    <div class="section-header">
+                        <span class="section-icon">⚡</span>
+                        <span class="section-label">Speed</span>
+                    </div>
+                    <div class="speed-control">
+                        <input
+                            id="speed-slider"
+                            type="range"
+                            min="0.5"
+                            max="3"
+                            step="0.5"
+                            value="1"
+                            aria-label="Game speed multiplier"
+                            class="slider-input"
+                        >
+                        <span id="speed-value" class="speed-value-display" aria-live="polite">1.0x</span>
+                    </div>
+                </div>
+
+                <!-- Sound Control Section -->
+                <div class="panel-section sound-group">
+                    <div class="section-header">
+                        <span class="section-icon">♪</span>
+                        <span class="section-label">Sound</span>
+                    </div>
+                    <button
+                        id="sound-toggle"
+                        class="toggle-button active"
+                        type="button"
+                        aria-pressed="true"
+                        aria-label="Toggle game sound"
+                    >
+                        <span class="toggle-track" aria-hidden="true">
+                            <span class="toggle-thumb"></span>
+                        </span>
+                        <span id="sound-label" class="toggle-label">On</span>
                     </button>
                 </div>
-            </div>
 
-            <!-- Game over screen -->
-            <div id="game-over-screen" class="game-message hidden" aria-hidden="true">
-                <div class="message-inner">
-                    <span class="message-kicker">AVENMARK</span>
-                    <h2>Is that all you got?</h2>
-                    <p id="final-score">Score 0</p>
-                    <button id="restart-button" class="primary-button" type="button">
-                        Run again
-                    </button>
+                <!-- Difficulty Display -->
+                <div class="panel-section difficulty-group">
+                    <div class="section-header">
+                        <span class="section-icon">⚔</span>
+                        <span class="section-label">Difficulty</span>
+                    </div>
+                    <output id="difficulty-display" class="difficulty-value" aria-live="polite">Easy</output>
                 </div>
-            </div>
+            </aside>
+        </section>
+    </main>
 
-            <div id="continue-message" class="continue-message" aria-live="polite">
-                Continue plz :)
-            </div>
-        </div>
-
-        <div class="control-panel" aria-label="Game controls and scores">
-            <div class="score-group">
-                <span class="panel-label">Score</span>
-                <strong id="score-display">0</strong>
-            </div>
-
-            <div class="score-group">
-                <span class="panel-label">High score</span>
-                <strong id="high-score-display">0</strong>
-            </div>
-
-            <div class="speed-group">
-                <div class="speed-heading">
-                    <span class="panel-label">Speed</span>
-                    <span id="speed-value">1</span>
-                </div>
-
-                <input
-                    id="speed-slider"
-                    type="range"
-                    min="0"
-                    max="5"
-                    step="1"
-                    value="1"
-                    aria-label="Game speed"
-                >
-            </div>
-
-            <div class="sound-group">
-                <span class="panel-label">Sound</span>
-                <button
-                    id="sound-toggle"
-                    class="toggle-button active"
-                    type="button"
-                    aria-pressed="true"
-                    aria-label="Toggle sound"
-                >
-                    <span class="toggle-track" aria-hidden="true">
-                        <span class="toggle-thumb"></span>
-                    </span>
-                    <span id="sound-label">On</span>
-                </button>
-            </div>
-        </div>
-    </section>
-</main>
-
-<script src="script.js"></script>
+    <!-- ============================================
+         SCRIPTS
+         ============================================ -->
+    <script src="script.js" defer></script>
 </body>
 </html>
