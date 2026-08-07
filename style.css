@@ -1,23 +1,27 @@
 /* ==========================================================
    AVENMARK AVI RUNNER
-   STYLE SYSTEM
+   FINAL STYLE SYSTEM
 ========================================================== */
 
 :root {
     --avenmark-bg: #F5F5F2;
     --avenmark-dark: #2F2F2F;
-    --avenmark-accent: #C47A45;
-    --avenmark-white: #F5F5F2;
+    --avenmark-copper: #C47A45;
     --avenmark-space: #103159;
 
     --avenmark-border: rgba(47, 47, 47, 0.10);
-
-    --avenmark-radius-sm: 12px;
-    --avenmark-radius-lg: 20px;
-    --avenmark-radius-pill: 999px;
+    --avenmark-border-soft: rgba(47, 47, 47, 0.06);
 
     --avenmark-shadow:
         0 10px 30px rgba(47, 47, 47, 0.06);
+
+    --avenmark-shadow-deep:
+        0 22px 58px rgba(47, 47, 47, 0.12);
+
+    --avenmark-radius-sm: 12px;
+    --avenmark-radius-md: 16px;
+    --avenmark-radius-lg: 20px;
+    --avenmark-radius-pill: 999px;
 
     --avenmark-font:
         "Montserrat",
@@ -45,14 +49,44 @@ body {
 
 html {
     background: var(--avenmark-bg);
+    scroll-behavior: smooth;
+    -webkit-tap-highlight-color: transparent;
 }
 
 body {
+    min-height: 100vh;
     background: var(--avenmark-bg);
     color: var(--avenmark-dark);
     font-family: var(--avenmark-font);
-    min-height: 100vh;
     overflow-x: hidden;
+    text-rendering: optimizeLegibility;
+    -webkit-font-smoothing: antialiased;
+}
+
+button,
+input {
+    font: inherit;
+}
+
+button {
+    cursor: pointer;
+}
+
+img,
+canvas {
+    display: block;
+}
+
+/* ==========================================================
+   GLOBAL HELPERS
+========================================================== */
+
+.hidden {
+    display: none !important;
+}
+
+.active {
+    display: flex;
 }
 
 /* ==========================================================
@@ -61,21 +95,21 @@ body {
 
 .app-header {
     width: 100%;
-    height: 80px;
+    min-height: 80px;
 
     display: flex;
     align-items: center;
     justify-content: space-between;
 
+    gap: 24px;
+
     padding: 0 28px;
 
     background: var(--avenmark-bg);
-
-    border-bottom:
-        1px solid rgba(47, 47, 47, 0.10);
+    border-bottom: 1px solid var(--avenmark-border);
 
     position: relative;
-    z-index: 20;
+    z-index: 30;
 }
 
 .brand {
@@ -88,7 +122,6 @@ body {
 .logo {
     width: 50px;
     height: 50px;
-
     object-fit: contain;
     flex: 0 0 auto;
 }
@@ -98,46 +131,50 @@ body {
 }
 
 .brand-copy h1 {
-    font-family: var(--avenmark-font);
-    font-size: 22px;
-    font-weight: 700;
-    letter-spacing: -0.3px;
+    color: var(--avenmark-dark);
+    font-size: clamp(17px, 2vw, 23px);
+    line-height: 1.15;
+    font-weight: 800;
+    letter-spacing: -0.4px;
     white-space: nowrap;
 }
+
+/* ==========================================================
+   HEADER CONTROLS
+========================================================== */
 
 .header-controls {
     display: flex;
     align-items: center;
     gap: 10px;
+    flex-shrink: 0;
 }
 
 .control-button {
     appearance: none;
+    border: 1px solid rgba(196, 122, 69, 0.22);
 
-    border: 1px solid rgba(47, 47, 47, 0.12);
-    background: var(--avenmark-bg);
-    color: var(--avenmark-dark);
+    background: var(--avenmark-copper);
+    color: var(--avenmark-bg);
 
     border-radius: var(--avenmark-radius-pill);
 
     padding: 10px 20px;
 
-    font-family: inherit;
     font-size: 13px;
-    font-weight: 700;
-
-    cursor: pointer;
+    font-weight: 800;
+    letter-spacing: 0.1px;
 
     transition:
         transform 0.2s ease,
-        background 0.2s ease,
-        color 0.2s ease,
+        opacity 0.2s ease,
+        box-shadow 0.2s ease,
         border-color 0.2s ease;
 }
 
 .control-button:hover {
     transform: translateY(-2px);
-    border-color: rgba(196, 122, 69, 0.35);
+    box-shadow: 0 8px 18px rgba(196, 122, 69, 0.18);
 }
 
 .control-button:active {
@@ -146,21 +183,20 @@ body {
 
 .control-button.active {
     background: var(--avenmark-dark);
+    border-color: rgba(47, 47, 47, 0.15);
     color: var(--avenmark-bg);
 }
 
 /* ==========================================================
-   MAIN
+   SHELL
 ========================================================== */
 
 .runner-shell {
     width: 100%;
     min-height: calc(100vh - 80px);
-
     display: flex;
-    align-items: stretch;
     justify-content: center;
-
+    align-items: stretch;
     padding: 20px;
 }
 
@@ -176,12 +212,8 @@ body {
     flex-direction: column;
 
     background: var(--avenmark-bg);
-
-    border:
-        1px solid rgba(47, 47, 47, 0.10);
-
+    border: 1px solid var(--avenmark-border);
     border-radius: var(--avenmark-radius-lg);
-
     box-shadow: var(--avenmark-shadow);
 
     overflow: hidden;
@@ -193,32 +225,29 @@ body {
 
 .game-area {
     position: relative;
-
     flex: 1 1 auto;
     min-height: 420px;
-
     overflow: hidden;
-
     background: var(--avenmark-bg);
 }
 
 #game-canvas {
     position: absolute;
     inset: 0;
-
     display: block;
-
     width: 100%;
     height: 100%;
+    background: var(--avenmark-bg);
 }
 
 /* ==========================================================
-   GAME MESSAGES
+   IN-GAME SCREENS
 ========================================================== */
 
 .game-message {
     position: absolute;
     inset: 0;
+    z-index: 15;
 
     display: flex;
     align-items: center;
@@ -226,19 +255,17 @@ body {
 
     padding: 30px;
 
-    background: rgba(245, 245, 242, 0.88);
-
-    backdrop-filter: blur(7px);
-    -webkit-backdrop-filter: blur(7px);
+    background: rgba(245, 245, 242, 0.84);
+    backdrop-filter: blur(8px);
+    -webkit-backdrop-filter: blur(8px);
 
     opacity: 1;
     visibility: visible;
+    pointer-events: auto;
 
     transition:
         opacity 0.25s ease,
         visibility 0.25s ease;
-
-    z-index: 10;
 }
 
 .game-message.hidden {
@@ -248,86 +275,208 @@ body {
 }
 
 .message-inner {
-    width: min(460px, 90%);
-
-    padding: 34px;
-
+    width: min(460px, 92%);
+    padding: 36px 34px;
     text-align: center;
 
     background: var(--avenmark-bg);
-
-    border:
-        1px solid rgba(47, 47, 47, 0.10);
-
+    border: 1px solid var(--avenmark-border);
     border-radius: var(--avenmark-radius-lg);
-
-    box-shadow:
-        0 18px 50px rgba(47, 47, 47, 0.08);
+    box-shadow: var(--avenmark-shadow-deep);
 }
 
 .message-kicker {
-    display: block;
-
+    display: inline-block;
     margin-bottom: 12px;
 
-    color: var(--avenmark-accent);
-
+    color: var(--avenmark-copper);
     font-size: 11px;
     font-weight: 800;
-
     letter-spacing: 1.8px;
 }
 
 .message-inner h2 {
-    font-size: clamp(24px, 3vw, 38px);
-    line-height: 1.2;
-
+    color: var(--avenmark-dark);
+    font-size: clamp(26px, 3.2vw, 40px);
+    line-height: 1.15;
     font-weight: 800;
-
+    letter-spacing: -0.8px;
     margin-bottom: 10px;
 }
 
 .message-inner p {
     color: rgba(47, 47, 47, 0.65);
-
     font-size: 14px;
     font-weight: 500;
-
-    margin-bottom: 25px;
+    line-height: 1.7;
+    margin-bottom: 24px;
 }
 
-/* ==========================================================
-   BUTTONS
-========================================================== */
-
 .primary-button {
-    border: none;
-
-    padding: 11px 24px;
-
+    appearance: none;
+    border: 0;
     border-radius: var(--avenmark-radius-pill);
 
-    background: var(--avenmark-accent);
+    padding: 11px 26px;
+
+    background: var(--avenmark-copper);
     color: var(--avenmark-bg);
 
-    font-family: inherit;
     font-size: 13px;
-    font-weight: 700;
-
-    cursor: pointer;
+    font-weight: 800;
 
     transition:
         transform 0.2s ease,
-        opacity 0.2s ease;
+        opacity 0.2s ease,
+        box-shadow 0.2s ease;
 }
 
 .primary-button:hover {
     transform: translateY(-2px);
-    opacity: 0.92;
+    box-shadow: 0 8px 20px rgba(196, 122, 69, 0.18);
 }
 
 .primary-button:active {
     transform: translateY(0);
+}
+
+/* ==========================================================
+   ROCKET INTRO
+========================================================== */
+
+.rocket-intro {
+    position: absolute;
+    inset: 0;
+    z-index: 12;
+
+    display: flex;
+    align-items: center;
+    justify-content: center;
+
+    background: transparent;
+    pointer-events: none;
+}
+
+.rocket-intro.hidden {
+    display: none;
+}
+
+.rocket-scene {
+    position: relative;
+    width: min(260px, 65vw);
+    height: min(260px, 65vw);
+
+    display: flex;
+    align-items: center;
+    justify-content: center;
+}
+
+.rocket {
+    position: relative;
+    width: 54px;
+    height: 92px;
+
+    border-radius: 30px 30px 22px 22px;
+
+    background: linear-gradient(
+        180deg,
+        var(--avenmark-dark) 0%,
+        #3a3a3a 100%
+    );
+
+    box-shadow: 0 16px 26px rgba(47, 47, 47, 0.18);
+
+    transform:
+        translateY(40px)
+        rotate(-11deg);
+
+    animation:
+        rocket-float 1.05s ease-in-out infinite;
+}
+
+.rocket-window {
+    position: absolute;
+    top: 18px;
+    left: 50%;
+    transform: translateX(-50%);
+
+    width: 22px;
+    height: 22px;
+
+    border-radius: 50%;
+
+    background: var(--avenmark-bg);
+    border: 3px solid var(--avenmark-copper);
+}
+
+.rocket-fin {
+    position: absolute;
+    bottom: 10px;
+    width: 18px;
+    height: 26px;
+
+    background: var(--avenmark-copper);
+    clip-path: polygon(0 100%, 100% 45%, 100% 100%);
+}
+
+.rocket-fin-left {
+    left: -4px;
+    transform: scaleX(-1);
+}
+
+.rocket-fin-right {
+    right: -4px;
+}
+
+.launch-trail {
+    position: absolute;
+    bottom: 18px;
+    left: 50%;
+    transform: translateX(-50%);
+
+    width: 12px;
+    height: 92px;
+
+    border-radius: var(--avenmark-radius-pill);
+
+    background: linear-gradient(
+        180deg,
+        rgba(196, 122, 69, 0.0) 0%,
+        rgba(196, 122, 69, 0.58) 42%,
+        rgba(196, 122, 69, 0.0) 100%
+    );
+
+    filter: blur(1px);
+
+    animation:
+        trail-pulse 0.35s ease-in-out infinite;
+}
+
+@keyframes rocket-float {
+    0% {
+        transform: translateY(42px) rotate(-11deg);
+    }
+    50% {
+        transform: translateY(26px) rotate(-10deg);
+    }
+    100% {
+        transform: translateY(42px) rotate(-11deg);
+    }
+}
+
+@keyframes trail-pulse {
+    0% {
+        opacity: 0.45;
+        height: 76px;
+    }
+    50% {
+        opacity: 0.78;
+        height: 96px;
+    }
+    100% {
+        opacity: 0.45;
+        height: 76px;
+    }
 }
 
 /* ==========================================================
@@ -336,29 +485,23 @@ body {
 
 .continue-message {
     position: absolute;
-
     top: 18%;
     left: 50%;
-
     transform: translate(-50%, -8px);
+    z-index: 5;
 
-    color: var(--avenmark-accent);
-
+    color: var(--avenmark-copper);
     font-size: 12px;
-    font-weight: 700;
-
+    font-weight: 800;
     letter-spacing: 0.5px;
+    white-space: nowrap;
 
     opacity: 0;
     pointer-events: none;
 
-    white-space: nowrap;
-
     transition:
         opacity 0.35s ease,
         transform 0.35s ease;
-
-    z-index: 5;
 }
 
 .continue-message.show {
@@ -374,28 +517,19 @@ body {
     min-height: 92px;
 
     display: grid;
-
     grid-template-columns:
-        minmax(100px, 0.8fr)
+        minmax(110px, 0.8fr)
         minmax(120px, 0.8fr)
         minmax(220px, 1.5fr)
         minmax(100px, 0.8fr);
 
     align-items: center;
-
     gap: 28px;
 
     padding: 18px 26px;
-
     background: var(--avenmark-bg);
-
-    border-top:
-        1px solid rgba(47, 47, 47, 0.10);
+    border-top: 1px solid var(--avenmark-border);
 }
-
-/* ==========================================================
-   PANEL VALUES
-========================================================== */
 
 .score-group,
 .speed-group,
@@ -407,17 +541,16 @@ body {
 
 .panel-label {
     color: rgba(47, 47, 47, 0.52);
-
     font-size: 10px;
     font-weight: 800;
-
     letter-spacing: 1.2px;
     text-transform: uppercase;
 }
 
 .score-group strong {
     font-size: 17px;
-    font-weight: 700;
+    font-weight: 800;
+    color: var(--avenmark-dark);
 }
 
 /* ==========================================================
@@ -431,50 +564,39 @@ body {
 }
 
 #speed-value {
+    color: var(--avenmark-copper);
     font-size: 12px;
-    font-weight: 700;
-    color: var(--avenmark-accent);
+    font-weight: 800;
 }
 
 #speed-slider {
     appearance: none;
-
     width: 100%;
     height: 4px;
+    margin-top: 8px;
 
-    background:
-        rgba(47, 47, 47, 0.15);
-
+    background: rgba(47, 47, 47, 0.15);
     border-radius: var(--avenmark-radius-pill);
-
     outline: none;
-
     cursor: pointer;
 }
 
 #speed-slider::-webkit-slider-thumb {
     appearance: none;
-
     width: 15px;
     height: 15px;
-
     border: none;
     border-radius: 50%;
-
-    background: var(--avenmark-accent);
-
+    background: var(--avenmark-copper);
     cursor: pointer;
 }
 
 #speed-slider::-moz-range-thumb {
     width: 15px;
     height: 15px;
-
     border: none;
     border-radius: 50%;
-
-    background: var(--avenmark-accent);
-
+    background: var(--avenmark-copper);
     cursor: pointer;
 }
 
@@ -487,35 +609,28 @@ body {
 }
 
 .toggle-button {
-    display: flex;
+    display: inline-flex;
     align-items: center;
     gap: 8px;
 
-    border: none;
+    border: 0;
     background: transparent;
-
     color: var(--avenmark-dark);
 
     padding: 0;
 
-    font-family: inherit;
     font-size: 12px;
-    font-weight: 700;
-
-    cursor: pointer;
+    font-weight: 800;
 }
 
 .toggle-track {
     width: 34px;
     height: 19px;
-
     display: flex;
     align-items: center;
-
     padding: 2px;
 
     border-radius: var(--avenmark-radius-pill);
-
     background: rgba(47, 47, 47, 0.18);
 
     transition: background 0.2s ease;
@@ -524,18 +639,14 @@ body {
 .toggle-thumb {
     width: 15px;
     height: 15px;
-
     border-radius: 50%;
-
     background: var(--avenmark-bg);
-
     box-shadow: 0 1px 4px rgba(47, 47, 47, 0.18);
-
     transition: transform 0.2s ease;
 }
 
 .toggle-button.active .toggle-track {
-    background: var(--avenmark-accent);
+    background: var(--avenmark-copper);
 }
 
 .toggle-button.active .toggle-thumb {
@@ -543,11 +654,20 @@ body {
 }
 
 /* ==========================================================
+   FOCUS
+========================================================== */
+
+button:focus-visible,
+input:focus-visible {
+    outline: 2px solid rgba(196, 122, 69, 0.45);
+    outline-offset: 3px;
+}
+
+/* ==========================================================
    RESPONSIVE
 ========================================================== */
 
 @media (max-width: 900px) {
-
     .app-header {
         padding: 0 20px;
     }
@@ -561,8 +681,7 @@ body {
     }
 
     .control-panel {
-        grid-template-columns:
-            1fr 1fr;
+        grid-template-columns: 1fr 1fr;
         gap: 18px 28px;
     }
 
@@ -572,7 +691,6 @@ body {
 }
 
 @media (max-width: 600px) {
-
     .app-header {
         height: 70px;
         padding: 0 15px;
@@ -626,5 +744,16 @@ body {
 
     .panel-label {
         font-size: 9px;
+    }
+}
+
+@media (prefers-reduced-motion: reduce) {
+    *,
+    *::before,
+    *::after {
+        animation-duration: 0.01ms !important;
+        animation-iteration-count: 1 !important;
+        transition-duration: 0.01ms !important;
+        scroll-behavior: auto !important;
     }
 }
